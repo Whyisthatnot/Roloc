@@ -475,6 +475,15 @@ player.CharacterAdded:Connect(function(character)
         mainfarm()
     end
 end)
+-- Simple Anti-AFK Script (Press F9 to stop)
+local VirtualUser = game:GetService("VirtualUser")
+local player = game:GetService("Players").LocalPlayer
+print("Anti-AFK")
+while true do
+    VirtualUser:CaptureController() -- Prevents AFK
+    VirtualUser:ClickButton2(Vector2.new()) -- Simulates a small mouse movement
+    wait(30) -- Adjust time (in seconds) if needed
+end
 
 -- Start everything
 initialize()
