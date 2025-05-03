@@ -1,4 +1,5 @@
 if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
+wait(2)
 -- Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
