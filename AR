@@ -105,7 +105,6 @@ local function optimized2d()
 end
 
 -- Gọi hàm để kích hoạt
-optimized2d()
 
 local function createStatsUI()
     local Players = game:GetService("Players")
@@ -329,4 +328,5 @@ player.CharacterAdded:Connect(function(character)
 end)
 
 -- Start farming
+optimized2d()
 mainfarm()
