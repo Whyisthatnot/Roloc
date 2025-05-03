@@ -5,26 +5,7 @@ if not FishGame.BeginOld then
     FishGame.BeginOld = FishGame.Begin
 end
 
-local lastArgs = nul
-
 FishGame.Begin = function(arg1, arg2, arg3)
-    arg2.BarSize = 1
-    lastArgs = {arg1, arg2, arg3}
+    arg2.BarSize=1
     return FishGame.BeginOld(arg1, arg2, arg3)
-end
-
--- Function to simulate auto-fishing loop
-local function AutoFish()
-    while true do
-        if lastArgs then
-            local success, err = pcall(function()
-                FishGame.Begin(unpack(lastArgs))
-            end)
-
-            if not success then
-                warn("Fishing failed:", err)
-            end
-        end
-        wait(5) -- Adjust this to match how long fishing takes
-    end
 end
