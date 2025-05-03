@@ -1,0 +1,352 @@
+-- Wait for game and player to load properly
+repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer
+
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local player = Players.LocalPlayer
+local dataRemoteEvent = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Configuration
+local TELEPORT_DELAY = 0.8
+local WINTER_CFRAME = CFrame.new(4623.21924, 248.286758, -1932.66699, -0.480712414, -0.876878381, 2.60472298e-05, -2.60472298e-05, 4.38690186e-05, 1, -0.876878381, 0.480712384, -4.39882278e-05)
+local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
+local farmEnabled = true
+local isRenderOff = true
+
+-- GUI Setup
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFarmGUI"
+ScreenGui.Parent = game.CoreGui
+
+-- Farm Toggle Button
+local farmToggleButton = Instance.new("TextButton")
+farmToggleButton.Size = UDim2.new(0, 200, 0, 50)
+farmToggleButton.Position = UDim2.new(0, 20, 0, 70)
+farmToggleButton.Text = "Farm: ON"
+farmToggleButton.Parent = ScreenGui
+farmToggleButton.MouseButton1Click:Connect(function()
+    farmEnabled = not farmEnabled
+    farmToggleButton.Text = farmEnabled and "Farm: ON" or "Farm: OFF"
+end)
+
+-- Render Toggle Button
+local renderToggleButton = Instance.new("TextButton")
+renderToggleButton.Size = UDim2.new(0, 120, 0, 40)
+renderToggleButton.Position = UDim2.new(0, 20, 0, 20)
+renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
+renderToggleButton.Parent = ScreenGui
+renderToggleButton.MouseButton1Click:Connect(function()
+    isRenderOff = not isRenderOff
+    RunService:Set3dRenderingEnabled(not isRenderOff)
+    renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
+end)
+
+-- Initial render state
+RunService:Set3dRenderingEnabled(false)
+
+-- Hide UI elements
+StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+
+local function optimized2d()
+    -- LocalScript đặt trong StarterPlayer > StarterPlayerScripts
+
+    local Players = game:GetService("Players")
+    local Lighting = game:GetService("Lighting")
+    local Terrain = workspace:FindFirstChildOfClass("Terrain")
+    local RunService = game:GetService("RunService")
+    local StarterGui = game:GetService("StarterGui")
+
+    local player = Players.LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+
+    -- [1] XÓA TOÀN BỘ UI NGƯỜI CHƠI
+    for _, child in ipairs(playerGui:GetChildren()) do
+        child:Destroy()
+    end
+
+    -- [2] TỐI ƯU HỆ THỐNG (Lighting, Terrain, v.v.)
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 1e10
+    Lighting.Brightness = 0
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
+    Lighting.ClockTime = 14
+
+    if Terrain then
+        Terrain.WaterWaveSize = 0
+        Terrain.WaterWaveSpeed = 0
+        Terrain.WaterReflectance = 0
+        Terrain.WaterTransparency = 1
+    end
+
+    -- [3] GỠ DECAL, PARTICLE, SHADOW
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 1
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+        end
+    end
+
+    for _, part in ipairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CastShadow = false
+        end
+    end
+
+    -- [4] TẮT UI MẶC ĐỊNH
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+
+    print("✅ FPS Boost VIP Activated!")
+end
+
+-- Gọi hàm để kích hoạt
+optimized2d()
+local function createStatsUI()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+
+    -- Hàm format số
+    local function formatNumber(num)
+        if not num or type(num) ~= "number" then return "0" end
+        
+        local suffixes = {"", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"}
+        local absNum = math.abs(num)
+        local suffixIndex = math.min(#suffixes, math.floor(math.log10(absNum)/3 + 1))
+        
+        local value = absNum / 10^(3*(suffixIndex-1))
+        local formatted = (value >= 100 and math.floor(value) or math.floor(value * 10)/10)
+        
+        return (num < 0 and "-" or "")..tostring(formatted):gsub("%.0$", "")..suffixes[suffixIndex]
+    end
+
+    -- Tạo UI
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PlayerStatsUI"
+    screenGui.Parent = game:GetService("CoreGui")
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 250, 0, 180)
+    frame.Position = UDim2.new(0.02, 0, 0.02, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    frame.BackgroundTransparency = 0.2
+    frame.BorderSizePixel = 0
+    frame.ClipsDescendants = true
+    frame.Parent = screenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
+    -- ICON ID
+    local COINS_ICON = "rbxassetid://6764432408"
+    local GEMS_ICON = "rbxassetid://6764432296"
+
+    -- Tạo label
+    local function createLabel(name, position, isTitle, isCredit)
+        local label = Instance.new("TextLabel")
+        label.Name = name
+        label.Size = isCredit and UDim2.new(1, 0, 0, 20) or UDim2.new(0.9, 0, 0, isTitle and 30 or 25)
+        label.Position = position
+        label.TextColor3 = isCredit and Color3.fromRGB(150, 150, 150) or 
+                          (isTitle and Color3.fromRGB(255, 215, 100) or Color3.fromRGB(220, 220, 255))
+        label.BackgroundTransparency = 1
+        label.Font = isCredit and Enum.Font.Gotham or 
+                    (isTitle and Enum.Font.GothamBlack or Enum.Font.GothamSemibold)
+        label.TextSize = isCredit and 12 or (isTitle and 18 or 16)
+        label.TextXAlignment = isCredit and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+        label.Parent = frame
+        return label
+    end
+
+    -- Tạo icon
+    local function createIcon(name, position, image)
+        local icon = Instance.new("ImageLabel")
+        icon.Name = name
+        icon.Size = UDim2.new(0, 25, 0, 25)
+        icon.Position = position
+        icon.BackgroundTransparency = 1
+        icon.Image = image
+        icon.Parent = frame
+        return icon
+    end
+
+    -- Giao diện chính
+    local titleLabel = createLabel("Title", UDim2.new(0.05, 0, 0.05, 0), true)
+    titleLabel.Text = player.Name
+
+    createIcon("CoinsIcon", UDim2.new(0.05, 0, 0.35, 0), COINS_ICON)
+    local coinsLabel = createLabel("CoinsLabel", UDim2.new(0.15, 0, 0.35, 0))
+    coinsLabel.Text = "Coins: 0"
+
+    createIcon("GemsIcon", UDim2.new(0.05, 0, 0.6, 0), GEMS_ICON)
+    local gemsLabel = createLabel("GemsLabel", UDim2.new(0.15, 0, 0.6, 0))
+    gemsLabel.Text = "Gems: 0"
+
+    local creditLabel = createLabel("Credit", UDim2.new(0, 0, 0.85, 0), false, true)
+    creditLabel.Text = "Made by @_lnch"
+
+    -- Cập nhật UI
+    local function updateUI(statName, value)
+        if statName == "Coins" then
+            coinsLabel.Text = "Coins: "..formatNumber(value or 0)
+        elseif statName == "Gems" then
+            gemsLabel.Text = "Gems: "..formatNumber(value or 0)
+        end
+    end
+
+    -- Lắng nghe sự thay đổi của leaderstats
+    local function setupLeaderstatsListeners(leaderstats)
+        -- Lắng nghe sự thay đổi thuộc tính
+        leaderstats:GetAttributeChangedSignal("Coins"):Connect(function()
+            updateUI("Coins", leaderstats:GetAttribute("Coins"))
+        end)
+        
+        leaderstats:GetAttributeChangedSignal("Gems"):Connect(function()
+            updateUI("Gems", leaderstats:GetAttribute("Gems"))
+        end)
+        
+        -- Cập nhật giá trị ban đầu
+        updateUI("Coins", leaderstats:GetAttribute("Coins"))
+        updateUI("Gems", leaderstats:GetAttribute("Gems"))
+    end
+
+    -- Kiểm tra khi leaderstats được thêm vào
+    player:GetPropertyChangedSignal("leaderstats"):Connect(function()
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats then
+            setupLeaderstatsListeners(leaderstats)
+        end
+    end)
+
+    -- Kiểm tra leaderstats ban đầu
+    local initialLeaderstats = player:FindFirstChild("leaderstats")
+    if initialLeaderstats then
+        setupLeaderstatsListeners(initialLeaderstats)
+    end
+end
+
+-- Gọi hàm
+createStatsUI()
+
+-- Teleport function
+local function teleportToWinter()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = WINTER_CFRAME
+        task.wait(TELEPORT_DELAY)
+    end
+end
+
+-- Mount functions
+local function mount()
+    dataRemoteEvent:FireServer({{
+        Action = "Mount",
+        Event = "MountAction",
+        Name = "PurpleElder003a6e7"
+    }, "\11"})
+end 
+
+local function disMount()
+    dataRemoteEvent:FireServer({{
+        Action = "Dismount",
+        Event = "MountAction"
+    }, "\11"})
+end
+
+local enemiesFolder = workspace.__Main.__Enemies.Server
+
+-- Enemy functions
+local function findAliveEnemy(targetID)
+    local function search(folder)
+        for _, enemy in ipairs(folder:GetChildren()) do
+            if enemy:GetAttribute("Id") == targetID and enemy:GetAttribute("HP") > 0 then
+                return enemy 
+            elseif enemy:IsA("Folder") then
+                local found = search(enemy)
+                if found then
+                    return found
+                end
+            end
+        end
+        return nil
+    end
+    return search(enemiesFolder)
+end
+local function punchAttack(enemyData)
+    local args = {
+        {
+            {
+                Event = "PunchAttack",
+                Enemy = enemyData
+            },
+            "\005"
+        }
+    }
+    dataRemoteEvent:FireServer(unpack(args))
+end
+local function destroyEnemy(enemyData)
+    local args = {
+        {
+            {
+                Event = "EnemyDestroy",
+                Enemy = enemyData
+            },
+            "\005"
+        }
+    }
+    dataRemoteEvent:FireServer(unpack(args))
+end
+
+local function turnOnAutoClick()
+    player:SetAttribute("AutoClick", true)
+end
+
+-- Main farm loop
+local function mainfarm()
+    turnOnAutoClick()
+    mount()
+    task.wait(1.5)
+    disMount()
+    
+    while farmEnabled and task.wait() do
+        for _, enemyID in ipairs(enemyIDList) do
+            local enemyData = findAliveEnemy(enemyID)
+            while enemyData and farmEnabled do
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
+                end
+                
+                repeat
+                    punchAttack(enemyData.Name)
+                    task.wait(0.1)
+                until not enemyData or enemyData:GetAttribute("HP") == 0 or not farmEnabled
+                
+                if enemyData and enemyData:GetAttribute("HP") == 0 then
+                    for _ = 1, 5 do
+                        destroyEnemy(enemyData.Name)
+                        task.wait(0.3)
+                    end
+                end
+                
+                task.wait(TELEPORT_DELAY)
+                enemyData = findAliveEnemy(enemyID)
+            end
+        end
+    end
+end
+
+-- Auto respawn
+player.CharacterAdded:Connect(function(character)
+    character:WaitForChild("HumanoidRootPart")
+    task.wait(2)
+    if farmEnabled then
+        mainfarm()
+    end
+end)
+
+-- Start farming
+mainfarm()
