@@ -22,16 +22,7 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "AutoFarmGUI"
 ScreenGui.Parent = game.CoreGui
 
--- Farm Toggle Button
-local farmToggleButton = Instance.new("TextButton")
-farmToggleButton.Size = UDim2.new(0, 200, 0, 50)
-farmToggleButton.Position = UDim2.new(0, 20, 0, 70)
-farmToggleButton.Text = "Farm: ON"
-farmToggleButton.Parent = ScreenGui
-farmToggleButton.MouseButton1Click:Connect(function()
-    farmEnabled = not farmEnabled
-    farmToggleButton.Text = farmEnabled and "Farm: ON" or "Farm: OFF"
-end)
+
 
 -- Render Toggle Button
 local renderToggleButton = Instance.new("TextButton")
