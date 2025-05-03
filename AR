@@ -44,56 +44,140 @@ StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 
 local function optimized2d()
     -- LocalScript đặt trong StarterPlayer > StarterPlayerScripts
-
     local Players = game:GetService("Players")
     local Lighting = game:GetService("Lighting")
     local Terrain = workspace:FindFirstChildOfClass("Terrain")
     local RunService = game:GetService("RunService")
     local StarterGui = game:GetService("StarterGui")
+    local ContentProvider = game:GetService("ContentProvider")
 
     local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
 
-    -- [1] XÓA TOÀN BỘ UI NGƯỜI CHƠI
-    for _, child in ipairs(playerGui:GetChildren()) do
-        child:Destroy()
-    end
+    -- [0] THÊM MÀN HÌNH CHỜ LOAD GAME
+    local loadScreen = Instance.new("ScreenGui")
+    loadScreen.Name = "LoadingScreen"
+    loadScreen.IgnoreGuiInset = true
+    loadScreen.DisplayOrder = 9999
 
-    -- [2] TỐI ƯU HỆ THỐNG (Lighting, Terrain, v.v.)
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 1e10
-    Lighting.Brightness = 0
-    Lighting.EnvironmentDiffuseScale = 0
-    Lighting.EnvironmentSpecularScale = 0
-    Lighting.ClockTime = 14
+    local loadFrame = Instance.new("Frame")
+    loadFrame.Size = UDim2.new(1, 0, 1, 0)
+    loadFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+    loadFrame.Parent = loadScreen
 
-    if Terrain then
-        Terrain.WaterWaveSize = 0
-        Terrain.WaterWaveSpeed = 0
-        Terrain.WaterReflectance = 0
-        Terrain.WaterTransparency = 1
-    end
+    local loadText = Instance.new("TextLabel")
+    loadText.Size = UDim2.new(1, 0, 0, 50)
+    loadText.Position = UDim2.new(0, 0, 0.5, -25)
+    loadText.BackgroundTransparency = 1
+    loadText.Text = "Đang tối ưu hóa game, vui lòng chờ..."
+    loadText.TextColor3 = Color3.new(1, 1, 1)
+    loadText.Font = Enum.Font.SourceSansBold
+    loadText.TextSize = 24
+    loadText.Parent = loadFrame
 
-    -- [3] GỠ DECAL, PARTICLE, SHADOW
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = 1
-        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-            obj.Enabled = false
+    loadScreen.Parent = playerGui
+
+    -- Hàm xóa UI và tối ưu hóa
+    local function cleanUI()
+        for _, child in ipairs(playerGui:GetChildren()) do
+            if child.Name ~= "LoadingScreen" then -- Không xóa màn hình load
+                child:Destroy()
+            end
         end
     end
 
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CastShadow = false
+    -- Hàm tối ưu hóa hệ thống
+    local function optimizeSystem()
+        -- [2] TỐI ƯU HỆ THỐNG (Lighting, Terrain, v.v.)
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 1e10
+        Lighting.Brightness = 0
+        Lighting.EnvironmentDiffuseScale = 0
+        Lighting.EnvironmentSpecularScale = 0
+        Lighting.ClockTime = 14
+
+        if Terrain then
+            Terrain.WaterWaveSize = 0
+            Terrain.WaterWaveSpeed = 0
+            Terrain.WaterReflectance = 0
+            Terrain.WaterTransparency = 1
+        end
+
+        -- [3] GỠ DECAL, PARTICLE, SHADOW
+        for _, obj in ipairs(game:GetDescendants()) do
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                obj.Transparency = 1
+            elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                obj.Enabled = false
+            end
+        end
+
+        for _, part in ipairs(workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CastShadow = false
+            end
+        end
+
+        -- [4] TẮT UI MẶC ĐỊNH
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+    end
+
+    -- [5] THÊM KIỂM TRA VÀ TỐI ƯU HÓA LIÊN TỤC
+    local function continuousOptimization()
+        -- Kiểm tra UI liên tục
+        playerGui.ChildAdded:Connect(function(child)
+            wait(0.1)
+            if child.Name ~= "LoadingScreen" then
+                cleanUI()
+            end
+        end)
+
+        -- Kiểm tra các đối tượng mới được thêm vào game
+        game.DescendantAdded:Connect(function(descendant)
+            wait() -- Đợi 1 frame để tránh lag
+            if descendant:IsA("Decal") or descendant:IsA("Texture") then
+                descendant.Transparency = 1
+            elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") then
+                descendant.Enabled = false
+            elseif descendant:IsA("BasePart") then
+                descendant.CastShadow = false
+            end
+        end)
+
+        -- Tối ưu hóa định kỳ mỗi 30 giây
+        while wait(30) do
+            optimizeSystem()
+            cleanUI()
         end
     end
 
-    -- [4] TẮT UI MẶC ĐỊNH
-    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+    -- [6] CHỜ LOAD GAME TRƯỚC KHI TẮT MÀN HÌNH LOAD
+    local function waitForGameLoad()
+        -- Chờ tải assets
+        ContentProvider:PreloadAsync({workspace, Lighting})
+        
+        -- Chờ thêm 3 giây để đảm bảo
+        wait(3)
+        
+        -- Xóa màn hình load
+        if loadScreen then
+            loadScreen:Destroy()
+        end
+        
+        print("✅ FPS Boost VIP Activated!")
+    end
 
-    print("✅ FPS Boost VIP Activated!")
+    -- Chạy các hàm
+    optimizeSystem()
+    cleanUI()
+    
+    -- Bắt đầu các quá trình liên tục
+    coroutine.wrap(continuousOptimization)()
+    coroutine.wrap(waitForGameLoad)()
 end
+
+-- Kích hoạt
+optimized2d()
 
 -- Gọi hàm để kích hoạt
 
