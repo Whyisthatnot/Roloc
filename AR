@@ -473,7 +473,7 @@ player.CharacterAdded:Connect(function(character)
     character:WaitForChild("HumanoidRootPart")
     task.wait(2)
     if farmEnabled then
-\        mainfarm()
+        mainfarm()
     end
 end)
 
