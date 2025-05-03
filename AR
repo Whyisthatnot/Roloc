@@ -172,8 +172,8 @@ local function createStatsUI()
     corner.Parent = frame
 
     -- ICON IDs
-    local COINS_ICON = "rbxassetid://6764432408"
-    local GEMS_ICON = "rbxassetid://6764432296"
+    local COINS_ICON = "rbxassetid://"
+    local GEMS_ICON = "rbxassetid://"
 
     -- Create label helper
     local function createLabel(name, position, isTitle, isCredit)
