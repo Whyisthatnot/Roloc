@@ -217,7 +217,7 @@ local function createMainUI()
     title.Size = UDim2.new(1, -20, 0, 40)
     title.Position = UDim2.new(0, 10, 0, 10)
     title.BackgroundTransparency = 1
-    title.Text = "FPS BOOST VIP"
+    title.Text = "Made by _lnch"
     title.TextColor3 = Color3.fromRGB(255, 170, 0)
     title.Font = Enum.Font.GothamBlack
     title.TextSize = 24
