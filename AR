@@ -20,15 +20,6 @@ local WINTER_CFRAME = CFrame.new(4623.21924, 248.286758, -1932.66699, -0.4807124
 local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
 local farmEnabled = true
 local isRenderOff = true
--- Simple Anti-AFK Script (Press F9 to stop)
-local VirtualUser = game:GetService("VirtualUser")
-local player = game:GetService("Players").LocalPlayer
-print("Anti-AFK")
-while true do
-    VirtualUser:CaptureController() -- Prevents AFK
-    VirtualUser:ClickButton2(Vector2.new()) -- Simulates a small mouse movement
-    wait(30) -- Adjust time (in seconds) if needed
-end
 -- [1] LOADING SCREEN
 local loadScreen = Instance.new("ScreenGui")
 loadScreen.Name = "LoadingScreen"
