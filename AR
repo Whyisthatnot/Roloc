@@ -19,33 +19,38 @@ local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
 local farmEnabled = true
 local isRenderOff = true
 
--- [1] COMBINED BLACK SCREEN & UI SYSTEM
-local mainScreen = Instance.new("ScreenGui")
-mainScreen.Name = "MainInterface"
-mainScreen.IgnoreGuiInset = true
-mainScreen.DisplayOrder = 9999
+-- [1] LOADING SCREEN
+local loadScreen = Instance.new("ScreenGui")
+loadScreen.Name = "LoadingScreen"
+loadScreen.IgnoreGuiInset = true
+loadScreen.DisplayOrder = 9999
 
--- Black background (kept permanently)
-local blackFrame = Instance.new("Frame")
-blackFrame.Size = UDim2.new(1, 0, 1, 0)
-blackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-blackFrame.BackgroundTransparency = 0.3  -- Slightly transparent
-blackFrame.Parent = mainScreen
+local loadFrame = Instance.new("Frame")
+loadFrame.Size = UDim2.new(1, 0, 1, 0)
+loadFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+loadFrame.Parent = loadScreen
 
--- Loading text (will be replaced with UI)
-local loadingText = Instance.new("TextLabel")
-loadingText.Size = UDim2.new(1, 0, 0, 50)
-loadingText.Position = UDim2.new(0, 0, 0.5, -25)
-loadingText.BackgroundTransparency = 1
-loadingText.Text = "Đang tối ưu hóa game..."
-loadingText.TextColor3 = Color3.new(1, 1, 1)
-loadingText.Font = Enum.Font.GothamBold
-loadingText.TextSize = 24
-loadingText.Parent = blackFrame
+local loadText = Instance.new("TextLabel")
+loadText.Size = UDim2.new(1, 0, 0, 50)
+loadText.Position = UDim2.new(0, 0, 0.5, -25)
+loadText.BackgroundTransparency = 1
+loadText.Text = "Đang tối ưu hóa game, vui lòng chờ..."
+loadText.TextColor3 = Color3.new(1, 1, 1)
+loadText.Font = Enum.Font.SourceSansBold
+loadText.TextSize = 24
+loadText.Parent = loadFrame
 
-mainScreen.Parent = playerGui
+loadScreen.Parent = playerGui
 
 -- [2] OPTIMIZATION FUNCTIONS
+local function cleanUI()
+    for _, child in ipairs(playerGui:GetChildren()) do
+        if child.Name ~= "LoadingScreen" then
+            child:Destroy()
+        end
+    end
+end
+
 local function optimizeSystem()
     -- Lighting optimization
     Lighting.GlobalShadows = false
@@ -82,163 +87,186 @@ local function optimizeSystem()
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 end
 
--- [3] CREATE MAIN INTERFACE
-local function createMainUI()
-    -- Remove loading text
-    loadingText:Destroy()
+-- [3] CONTINUOUS OPTIMIZATION
+local function continuousOptimization()
+    -- Monitor UI changes
+    playerGui.ChildAdded:Connect(function(child)
+        task.wait(0.1)
+        if child.Name ~= "LoadingScreen" then
+            cleanUI()
+        end
+    end)
 
-    -- Main container
-    local uiContainer = Instance.new("Frame")
-    uiContainer.Size = UDim2.new(0.3, 0, 0.8, 0)
-    uiContainer.Position = UDim2.new(0.02, 0, 0.1, 0)
-    uiContainer.BackgroundTransparency = 0.7
-    uiContainer.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    uiContainer.Parent = blackFrame
+    -- Monitor new game objects
+    game.DescendantAdded:Connect(function(descendant)
+        task.wait()
+        if descendant:IsA("Decal") or descendant:IsA("Texture") then
+            descendant.Transparency = 1
+        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") then
+            descendant.Enabled = false
+        elseif descendant:IsA("BasePart") then
+            descendant.CastShadow = false
+        end
+    end)
+
+    -- Periodic optimization
+    while task.wait(30) do
+        optimizeSystem()
+        cleanUI()
+    end
+end
+
+-- [4] GUI FUNCTIONS
+local function createStatsUI()
+    local function formatNumber(num)
+        if not num or type(num) ~= "number" then return "0" end
+        
+        local suffixes = {"", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"}
+        local absNum = math.abs(num)
+        local suffixIndex = math.min(#suffixes, math.floor(math.log10(absNum)/3 + 1))
+        
+        local value = absNum / 10^(3*(suffixIndex-1))
+        local formatted = (value >= 100 and math.floor(value) or math.floor(value * 10)/10)
+        
+        return (num < 0 and "-" or "")..tostring(formatted):gsub("%.0$", "")..suffixes[suffixIndex]
+    end
+
+    -- Create UI
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PlayerStatsUI"
+    screenGui.Parent = game:GetService("CoreGui")
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 250, 0, 180)
+    frame.Position = UDim2.new(0.02, 0, 0.02, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    frame.BackgroundTransparency = 0.2
+    frame.BorderSizePixel = 0
+    frame.ClipsDescendants = true
+    frame.Parent = screenGui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = uiContainer
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
 
-    -- Title
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.Position = UDim2.new(0, 0, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Text = "FPS BOOST VIP"
-    title.TextColor3 = Color3.new(1, 0.5, 0)
-    title.Font = Enum.Font.GothamBlack
-    title.TextSize = 24
-    title.Parent = uiContainer
+    -- ICON IDs
+    local COINS_ICON = "rbxassetid://6764432408"
+    local GEMS_ICON = "rbxassetid://6764432296"
 
-    -- Stats section
-    local statsFrame = Instance.new("Frame")
-    statsFrame.Size = UDim2.new(0.9, 0, 0, 100)
-    statsFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
-    statsFrame.BackgroundTransparency = 1
-    statsFrame.Parent = uiContainer
+    -- Create label helper
+    local function createLabel(name, position, isTitle, isCredit)
+        local label = Instance.new("TextLabel")
+        label.Name = name
+        label.Size = isCredit and UDim2.new(1, 0, 0, 20) or UDim2.new(0.9, 0, 0, isTitle and 30 or 25)
+        label.Position = position
+        label.TextColor3 = isCredit and Color3.fromRGB(150, 150, 150) or 
+                          (isTitle and Color3.fromRGB(255, 215, 100) or Color3.fromRGB(220, 220, 255))
+        label.BackgroundTransparency = 1
+        label.Font = isCredit and Enum.Font.Gotham or 
+                    (isTitle and Enum.Font.GothamBlack or Enum.Font.GothamSemibold)
+        label.TextSize = isCredit and 12 or (isTitle and 18 or 16)
+        label.TextXAlignment = isCredit and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+        label.Parent = frame
+        return label
+    end
 
-    -- Coins display
-    local coinsIcon = Instance.new("ImageLabel")
-    coinsIcon.Size = UDim2.new(0, 25, 0, 25)
-    coinsIcon.Position = UDim2.new(0, 0, 0, 0)
-    coinsIcon.Image = "rbxassetid://6764432408"
-    coinsIcon.BackgroundTransparency = 1
-    coinsIcon.Parent = statsFrame
+    -- Create icon helper
+    local function createIcon(name, position, image)
+        local icon = Instance.new("ImageLabel")
+        icon.Name = name
+        icon.Size = UDim2.new(0, 25, 0, 25)
+        icon.Position = position
+        icon.BackgroundTransparency = 1
+        icon.Image = image
+        icon.Parent = frame
+        return icon
+    end
 
-    local coinsText = Instance.new("TextLabel")
-    coinsText.Size = UDim2.new(1, -30, 0, 25)
-    coinsText.Position = UDim2.new(0, 30, 0, 0)
-    coinsText.Text = "Coins: 0"
-    coinsText.TextColor3 = Color3.new(1, 1, 1)
-    coinsText.Font = Enum.Font.GothamSemibold
-    coinsText.TextSize = 18
-    coinsText.TextXAlignment = Enum.TextXAlignment.Left
-    coinsText.BackgroundTransparency = 1
-    coinsText.Parent = statsFrame
+    -- Main UI elements
+    local titleLabel = createLabel("Title", UDim2.new(0.05, 0, 0.05, 0), true)
+    titleLabel.Text = player.Name
 
-    -- Gems display
-    local gemsIcon = Instance.new("ImageLabel")
-    gemsIcon.Size = UDim2.new(0, 25, 0, 25)
-    gemsIcon.Position = UDim2.new(0, 0, 0, 35)
-    gemsIcon.Image = "rbxassetid://6764432296"
-    gemsIcon.BackgroundTransparency = 1
-    gemsIcon.Parent = statsFrame
+    createIcon("CoinsIcon", UDim2.new(0.05, 0, 0.35, 0), COINS_ICON)
+    local coinsLabel = createLabel("CoinsLabel", UDim2.new(0.15, 0, 0.35, 0))
+    coinsLabel.Text = "Coins: 0"
 
-    local gemsText = Instance.new("TextLabel")
-    gemsText.Size = UDim2.new(1, -30, 0, 25)
-    gemsText.Position = UDim2.new(0, 30, 0, 35)
-    gemsText.Text = "Gems: 0"
-    gemsText.TextColor3 = Color3.new(1, 1, 1)
-    gemsText.Font = Enum.Font.GothamSemibold
-    gemsText.TextSize = 18
-    gemsText.TextXAlignment = Enum.TextXAlignment.Left
-    gemsText.BackgroundTransparency = 1
-    gemsText.Parent = statsFrame
+    createIcon("GemsIcon", UDim2.new(0.05, 0, 0.6, 0), GEMS_ICON)
+    local gemsLabel = createLabel("GemsLabel", UDim2.new(0.15, 0, 0.6, 0))
+    gemsLabel.Text = "Gems: 0"
 
-    -- Controls section
-    local controlsFrame = Instance.new("Frame")
-    controlsFrame.Size = UDim2.new(0.9, 0, 0, 120)
-    controlsFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
-    controlsFrame.BackgroundTransparency = 1
-    controlsFrame.Parent = uiContainer
+    local creditLabel = createLabel("Credit", UDim2.new(0, 0, 0.85, 0), false, true)
+    creditLabel.Text = "Made by @_lnch"
 
-    -- Render toggle button
-    local renderButton = Instance.new("TextButton")
-    renderButton.Size = UDim2.new(1, 0, 0, 40)
-    renderButton.Position = UDim2.new(0, 0, 0, 0)
-    renderButton.Text = isRenderOff and "BẬT RENDER" or "TẮT RENDER"
-    renderButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.3)
-    renderButton.TextColor3 = Color3.new(1, 1, 1)
-    renderButton.Font = Enum.Font.GothamBold
-    renderButton.TextSize = 16
-    renderButton.Parent = controlsFrame
-
-    local renderCorner = Instance.new("UICorner")
-    renderCorner.CornerRadius = UDim.new(0, 8)
-    renderCorner.Parent = renderButton
-
-    renderButton.MouseButton1Click:Connect(function()
-        isRenderOff = not isRenderOff
-        RunService:Set3dRenderingEnabled(not isRenderOff)
-        renderButton.Text = isRenderOff and "BẬT RENDER" or "TẮT RENDER"
-    end)
-
-    -- Farm toggle button
-    local farmButton = Instance.new("TextButton")
-    farmButton.Size = UDim2.new(1, 0, 0, 40)
-    farmButton.Position = UDim2.new(0, 0, 0, 50)
-    farmButton.Text = farmEnabled and "DỪNG FARM" or "BẮT ĐẦU FARM"
-    farmButton.BackgroundColor3 = Color3.new(0.3, 0.2, 0.2)
-    farmButton.TextColor3 = Color3.new(1, 1, 1)
-    farmButton.Font = Enum.Font.GothamBold
-    farmButton.TextSize = 16
-    farmButton.Parent = controlsFrame
-
-    local farmCorner = Instance.new("UICorner")
-    farmCorner.CornerRadius = UDim.new(0, 8)
-    farmCorner.Parent = farmButton
-
-    farmButton.MouseButton1Click:Connect(function()
-        farmEnabled = not farmEnabled
-        farmButton.Text = farmEnabled and "DỪNG FARM" or "BẮT ĐẦU FARM"
-    end)
-
-    -- Status text
-    local statusText = Instance.new("TextLabel")
-    statusText.Size = UDim2.new(1, 0, 0, 30)
-    statusText.Position = UDim2.new(0, 0, 0.85, 0)
-    statusText.Text = "Trạng thái: Đang hoạt động"
-    statusText.TextColor3 = Color3.new(0, 1, 0)
-    statusText.Font = Enum.Font.GothamMedium
-    statusText.TextSize = 14
-    statusText.BackgroundTransparency = 1
-    statusText.Parent = uiContainer
-
-    -- Update function for stats
-    local function updateStats()
+    -- UI update function
+    local function updateUI()
         local leaderstats = player:FindFirstChild("leaderstats")
         if leaderstats then
-            local coins = leaderstats:GetAttribute("Coins") or 0
-            local gems = leaderstats:GetAttribute("Gems") or 0
-            
-            -- Format numbers with commas
-            coinsText.Text = "Coins: "..tostring(coins):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
-            gemsText.Text = "Gems: "..tostring(gems):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
+            coinsLabel.Text = "Coins: "..formatNumber(leaderstats:GetAttribute("Coins") or 0)
+            gemsLabel.Text = "Gems: "..formatNumber(leaderstats:GetAttribute("Gems") or 0)
         end
     end
 
     -- Update listeners
-    RunService.Heartbeat:Connect(updateStats)
+    RunService.Heartbeat:Connect(updateUI)
     player.CharacterAdded:Connect(function()
         task.wait(1)
-        updateStats()
+        updateUI()
     end)
 
-    -- Initial update
-    updateStats()
+    updateUI()
 end
 
--- [4] FARMING FUNCTIONS
+local function createControlGUI()
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "AutoFarmGUI"
+    ScreenGui.Parent = game.CoreGui
+
+    -- Render Toggle Button
+    local renderToggleButton = Instance.new("TextButton")
+    renderToggleButton.Size = UDim2.new(0, 120, 0, 40)
+    renderToggleButton.Position = UDim2.new(0, 20, 0, 70)
+    renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
+    renderToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    renderToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    renderToggleButton.Font = Enum.Font.GothamBold
+    renderToggleButton.TextSize = 14
+    renderToggleButton.Parent = ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = renderToggleButton
+
+    renderToggleButton.MouseButton1Click:Connect(function()
+        isRenderOff = not isRenderOff
+        RunService:Set3dRenderingEnabled(not isRenderOff)
+        renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
+    end)
+
+    -- Farm Toggle Button
+    local farmToggleButton = Instance.new("TextButton")
+    farmToggleButton.Size = UDim2.new(0, 120, 0, 40)
+    farmToggleButton.Position = UDim2.new(0, 20, 0, 120)
+    farmToggleButton.Text = farmEnabled and "Tắt Auto Farm" or "Bật Auto Farm"
+    farmToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    farmToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    farmToggleButton.Font = Enum.Font.GothamBold
+    farmToggleButton.TextSize = 14
+    farmToggleButton.Parent = ScreenGui
+    
+    local corner2 = Instance.new("UICorner")
+    corner2.CornerRadius = UDim.new(0, 6)
+    corner2.Parent = farmToggleButton
+
+    farmToggleButton.MouseButton1Click:Connect(function()
+        farmEnabled = not farmEnabled
+        farmToggleButton.Text = farmEnabled and "Tắt Auto Farm" or "Bật Auto Farm"
+    end)
+
+    -- Initial render state
+    RunService:Set3dRenderingEnabled(false)
+end
+
+-- [5] FARMING FUNCTIONS
 local function teleportToWinter()
     if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         player.Character.HumanoidRootPart.CFrame = WINTER_CFRAME
@@ -310,8 +338,8 @@ local function turnOnAutoClick()
     player:SetAttribute("AutoClick", true)
 end
 
--- [5] MAIN FARM LOOP
-local function mainFarm()
+-- [6] MAIN FARM LOOP
+local function mainfarm()
     turnOnAutoClick()
     mount()
     task.wait(1.5)
@@ -344,24 +372,33 @@ local function mainFarm()
     end
 end
 
--- [6] INITIALIZATION
+-- [7] INITIALIZATION
 local function initialize()
     -- Initial optimization
     optimizeSystem()
+    cleanUI()
     
     -- Wait for game to fully load
     ContentProvider:PreloadAsync({workspace, Lighting})
     task.wait(3)
     
-    -- Create the combined UI
-    createMainUI()
+    -- Remove loading screen
+    if loadScreen then
+        loadScreen:Destroy()
+    end
+    
+    -- Create UIs
+    createStatsUI()
+    createControlGUI()
+    
+    -- Start continuous optimization
+    coroutine.wrap(continuousOptimization)()
     
     -- Start farming
     teleportToWinter()
-    mainFarm()
+    mainfarm()
     
-    -- Set initial render state
-    RunService:Set3dRenderingEnabled(false)
+    print("✅ FPS Boost VIP Activated!")
 end
 
 -- Auto respawn handler
@@ -370,7 +407,7 @@ player.CharacterAdded:Connect(function(character)
     task.wait(2)
     if farmEnabled then
         teleportToWinter()
-        mainFarm()
+        mainfarm()
     end
 end)
 
