@@ -1,6 +1,4 @@
--- Wait for game and player to load properly
-repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer
-
+if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
 -- Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,7 +7,6 @@ local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
 local Terrain = workspace:FindFirstChildOfClass("Terrain")
 local ContentProvider = game:GetService("ContentProvider")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -22,109 +19,34 @@ local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
 local farmEnabled = true
 local isRenderOff = true
 
--- [1] ENHANCED LOADING SYSTEM
-local loadingScreen = Instance.new("ScreenGui")
-loadingScreen.Name = "LoadingScreen"
-loadingScreen.IgnoreGuiInset = true
-loadingScreen.DisplayOrder = 9999
+-- [1] COMBINED BLACK SCREEN & UI SYSTEM
+local mainScreen = Instance.new("ScreenGui")
+mainScreen.Name = "MainInterface"
+mainScreen.IgnoreGuiInset = true
+mainScreen.DisplayOrder = 9999
 
-local loadingFrame = Instance.new("Frame")
-loadingFrame.Size = UDim2.new(1, 0, 1, 0)
-loadingFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-loadingFrame.Parent = loadingScreen
+-- Black background (kept permanently)
+local blackFrame = Instance.new("Frame")
+blackFrame.Size = UDim2.new(1, 0, 1, 0)
+blackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+blackFrame.BackgroundTransparency = 0.3  -- Slightly transparent
+blackFrame.Parent = mainScreen
 
+-- Loading text (will be replaced with UI)
 local loadingText = Instance.new("TextLabel")
 loadingText.Size = UDim2.new(1, 0, 0, 50)
-loadingText.Position = UDim2.new(0, 0, 0.4, -25)
+loadingText.Position = UDim2.new(0, 0, 0.5, -25)
 loadingText.BackgroundTransparency = 1
-loadingText.Text = "Đang khởi tạo hệ thống..."
+loadingText.Text = "Đang tối ưu hóa game..."
 loadingText.TextColor3 = Color3.new(1, 1, 1)
 loadingText.Font = Enum.Font.GothamBold
 loadingText.TextSize = 24
-loadingText.Parent = loadingFrame
+loadingText.Parent = blackFrame
 
-local progressContainer = Instance.new("Frame")
-progressContainer.Size = UDim2.new(0.4, 0, 0, 20)
-progressContainer.Position = UDim2.new(0.3, 0, 0.5, 0)
-progressContainer.BackgroundTransparency = 1
-progressContainer.Parent = loadingFrame
+mainScreen.Parent = playerGui
 
-local progressBar = Instance.new("Frame")
-progressBar.Size = UDim2.new(1, 0, 0, 6)
-progressBar.Position = UDim2.new(0, 0, 0.5, -3)
-progressBar.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-progressBar.BorderSizePixel = 0
-progressBar.Parent = progressContainer
-
-local progressFill = Instance.new("Frame")
-progressFill.Size = UDim2.new(0, 0, 1, 0)
-progressFill.BackgroundColor3 = Color3.new(0, 0.7, 1)
-progressFill.BorderSizePixel = 0
-progressFill.Parent = progressBar
-
-local progressText = Instance.new("TextLabel")
-progressText.Size = UDim2.new(1, 0, 1, 0)
-progressText.Position = UDim2.new(0, 0, 1.5, 0)
-progressText.BackgroundTransparency = 1
-progressText.Text = "0%"
-progressText.TextColor3 = Color3.new(1, 1, 1)
-progressText.Font = Enum.Font.GothamMedium
-progressText.TextSize = 14
-progressText.Parent = progressContainer
-
-loadingScreen.Parent = playerGui
-
--- [2] INTELLIGENT LOADING CHECKER
-local function updateProgress(progress, text)
-    progressFill.Size = UDim2.new(progress, 0, 1, 0)
-    progressText.Text = string.format("%d%%", math.floor(progress * 100))
-    loadingText.Text = text
-    task.wait()
-end
-
-local function checkEssentialElements()
-    local essentialElements = {
-        {obj = workspace:FindFirstChild("__Main"), name = "Bản đồ chính"},
-        {obj = player.Character, name = "Nhân vật"},
-        {obj = player:FindFirstChild("leaderstats"), name = "Thống kê"},
-        {obj = dataRemoteEvent, name = "Kết nối server"}
-    }
-    
-    local loadedCount = 0
-    for i, element in ipairs(essentialElements) do
-        local startTime = os.clock()
-        local timeout = 10 -- 10 second timeout per element
-        
-        while not element.obj and os.clock() - startTime < timeout do
-            updateProgress((i-1 + loadedCount/#essentialElements)/#essentialElements, 
-                string.format("Đang chờ %s...", element.name))
-            task.wait(0.5)
-            -- Refresh references
-            if element.name == "Bản đồ chính" then
-                element.obj = workspace:FindFirstChild("__Main")
-            elseif element.name == "Nhân vật" then
-                element.obj = player.Character
-            elseif element.name == "Thống kê" then
-                element.obj = player:FindFirstChild("leaderstats")
-            end
-        end
-        
-        if element.obj then
-            loadedCount += 1
-            updateProgress((i-1 + loadedCount/#essentialElements)/#essentialElements, 
-                string.format("Đã tải %s!", element.name))
-        else
-            warn(string.format("Không thể tải %s sau %d giây", element.name, timeout))
-        end
-    end
-    
-    return loadedCount == #essentialElements
-end
-
--- [3] ADVANCED OPTIMIZATION SYSTEM
+-- [2] OPTIMIZATION FUNCTIONS
 local function optimizeSystem()
-    updateProgress(0.25, "Đang tối ưu ánh sáng...")
-    
     -- Lighting optimization
     Lighting.GlobalShadows = false
     Lighting.FogEnd = 1e10
@@ -134,7 +56,6 @@ local function optimizeSystem()
     Lighting.ClockTime = 14
 
     -- Terrain optimization
-    updateProgress(0.35, "Đang tối ưu địa hình...")
     if Terrain then
         Terrain.WaterWaveSize = 0
         Terrain.WaterWaveSpeed = 0
@@ -143,30 +64,14 @@ local function optimizeSystem()
     end
 
     -- Object optimization
-    updateProgress(0.45, "Đang tối ưu đối tượng...")
-    local totalObjects = 0
-    for _ in pairs(game:GetDescendants()) do totalObjects += 1 end
-    
-    local processed = 0
-    local batchSize = 500
-    local lastUpdate = 0
-    
     for _, obj in ipairs(game:GetDescendants()) do
         if obj:IsA("Decal") or obj:IsA("Texture") then
             obj.Transparency = 1
         elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
             obj.Enabled = false
         end
-        
-        processed += 1
-        if processed - lastUpdate >= batchSize then
-            updateProgress(0.45 + 0.3 * (processed/totalObjects), 
-                string.format("Đang tối ưu: %d/%d", processed, totalObjects))
-            lastUpdate = processed
-        end
     end
 
-    updateProgress(0.75, "Đang tắt bóng đổ...")
     for _, part in ipairs(workspace:GetDescendants()) do
         if part:IsA("BasePart") then
             part.CastShadow = false
@@ -174,39 +79,21 @@ local function optimizeSystem()
     end
 
     -- Disable default UI
-    updateProgress(0.85, "Đang tắt UI mặc định...")
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
-    
-    -- Set initial render state
-    RunService:Set3dRenderingEnabled(false)
-    
-    updateProgress(1, "Tối ưu hóa hoàn tất!")
 end
 
--- [4] MAIN UI SYSTEM
-local mainUI = nil
-
+-- [3] CREATE MAIN INTERFACE
 local function createMainUI()
-    -- Create main UI container
-    mainUI = Instance.new("ScreenGui")
-    mainUI.Name = "MainInterface"
-    mainUI.IgnoreGuiInset = true
-    mainUI.DisplayOrder = 9999
+    -- Remove loading text
+    loadingText:Destroy()
 
-    -- Semi-transparent black background
-    local background = Instance.new("Frame")
-    background.Size = UDim2.new(1, 0, 1, 0)
-    background.BackgroundColor3 = Color3.new(0, 0, 0)
-    background.BackgroundTransparency = 0.3
-    background.Parent = mainUI
-
-    -- UI Container
+    -- Main container
     local uiContainer = Instance.new("Frame")
-    uiContainer.Size = UDim2.new(0.3, 0, 0.7, 0)
-    uiContainer.Position = UDim2.new(0.02, 0, 0.15, 0)
-    uiContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    uiContainer.Size = UDim2.new(0.3, 0, 0.8, 0)
+    uiContainer.Position = UDim2.new(0.02, 0, 0.1, 0)
     uiContainer.BackgroundTransparency = 0.7
-    uiContainer.Parent = mainUI
+    uiContainer.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+    uiContainer.Parent = blackFrame
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
@@ -214,24 +101,23 @@ local function createMainUI()
 
     -- Title
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 40)
-    title.Position = UDim2.new(0, 10, 0, 10)
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 10)
     title.BackgroundTransparency = 1
-    title.Text = "Made by _lnch"
-    title.TextColor3 = Color3.fromRGB(255, 170, 0)
+    title.Text = "FPS BOOST VIP"
+    title.TextColor3 = Color3.new(1, 0.5, 0)
     title.Font = Enum.Font.GothamBlack
     title.TextSize = 24
-    title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = uiContainer
 
-    -- Stats Frame
+    -- Stats section
     local statsFrame = Instance.new("Frame")
-    statsFrame.Size = UDim2.new(1, -20, 0, 100)
-    statsFrame.Position = UDim2.new(0, 10, 0, 60)
+    statsFrame.Size = UDim2.new(0.9, 0, 0, 100)
+    statsFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
     statsFrame.BackgroundTransparency = 1
     statsFrame.Parent = uiContainer
 
-    -- Coins Display
+    -- Coins display
     local coinsIcon = Instance.new("ImageLabel")
     coinsIcon.Size = UDim2.new(0, 25, 0, 25)
     coinsIcon.Position = UDim2.new(0, 0, 0, 0)
@@ -239,18 +125,18 @@ local function createMainUI()
     coinsIcon.BackgroundTransparency = 1
     coinsIcon.Parent = statsFrame
 
-    local coinsLabel = Instance.new("TextLabel")
-    coinsLabel.Size = UDim2.new(1, -30, 0, 25)
-    coinsLabel.Position = UDim2.new(0, 30, 0, 0)
-    coinsLabel.Text = "Coins: 0"
-    coinsLabel.TextColor3 = Color3.new(1, 1, 1)
-    coinsLabel.Font = Enum.Font.GothamSemibold
-    coinsLabel.TextSize = 18
-    coinsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    coinsLabel.BackgroundTransparency = 1
-    coinsLabel.Parent = statsFrame
+    local coinsText = Instance.new("TextLabel")
+    coinsText.Size = UDim2.new(1, -30, 0, 25)
+    coinsText.Position = UDim2.new(0, 30, 0, 0)
+    coinsText.Text = "Coins: 0"
+    coinsText.TextColor3 = Color3.new(1, 1, 1)
+    coinsText.Font = Enum.Font.GothamSemibold
+    coinsText.TextSize = 18
+    coinsText.TextXAlignment = Enum.TextXAlignment.Left
+    coinsText.BackgroundTransparency = 1
+    coinsText.Parent = statsFrame
 
-    -- Gems Display
+    -- Gems display
     local gemsIcon = Instance.new("ImageLabel")
     gemsIcon.Size = UDim2.new(0, 25, 0, 25)
     gemsIcon.Position = UDim2.new(0, 0, 0, 35)
@@ -258,30 +144,30 @@ local function createMainUI()
     gemsIcon.BackgroundTransparency = 1
     gemsIcon.Parent = statsFrame
 
-    local gemsLabel = Instance.new("TextLabel")
-    gemsLabel.Size = UDim2.new(1, -30, 0, 25)
-    gemsLabel.Position = UDim2.new(0, 30, 0, 35)
-    gemsLabel.Text = "Gems: 0"
-    gemsLabel.TextColor3 = Color3.new(1, 1, 1)
-    gemsLabel.Font = Enum.Font.GothamSemibold
-    gemsLabel.TextSize = 18
-    gemsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    gemsLabel.BackgroundTransparency = 1
-    gemsLabel.Parent = statsFrame
+    local gemsText = Instance.new("TextLabel")
+    gemsText.Size = UDim2.new(1, -30, 0, 25)
+    gemsText.Position = UDim2.new(0, 30, 0, 35)
+    gemsText.Text = "Gems: 0"
+    gemsText.TextColor3 = Color3.new(1, 1, 1)
+    gemsText.Font = Enum.Font.GothamSemibold
+    gemsText.TextSize = 18
+    gemsText.TextXAlignment = Enum.TextXAlignment.Left
+    gemsText.BackgroundTransparency = 1
+    gemsText.Parent = statsFrame
 
-    -- Controls Frame
+    -- Controls section
     local controlsFrame = Instance.new("Frame")
-    controlsFrame.Size = UDim2.new(1, -20, 0, 150)
-    controlsFrame.Position = UDim2.new(0, 10, 0, 170)
+    controlsFrame.Size = UDim2.new(0.9, 0, 0, 120)
+    controlsFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
     controlsFrame.BackgroundTransparency = 1
     controlsFrame.Parent = uiContainer
 
-    -- Render Toggle Button
+    -- Render toggle button
     local renderButton = Instance.new("TextButton")
     renderButton.Size = UDim2.new(1, 0, 0, 40)
     renderButton.Position = UDim2.new(0, 0, 0, 0)
     renderButton.Text = isRenderOff and "BẬT RENDER" or "TẮT RENDER"
-    renderButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    renderButton.BackgroundColor3 = Color3.new(0.2, 0.2, 0.3)
     renderButton.TextColor3 = Color3.new(1, 1, 1)
     renderButton.Font = Enum.Font.GothamBold
     renderButton.TextSize = 16
@@ -297,12 +183,12 @@ local function createMainUI()
         renderButton.Text = isRenderOff and "BẬT RENDER" or "TẮT RENDER"
     end)
 
-    -- Farm Toggle Button
+    -- Farm toggle button
     local farmButton = Instance.new("TextButton")
     farmButton.Size = UDim2.new(1, 0, 0, 40)
     farmButton.Position = UDim2.new(0, 0, 0, 50)
     farmButton.Text = farmEnabled and "DỪNG FARM" or "BẮT ĐẦU FARM"
-    farmButton.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
+    farmButton.BackgroundColor3 = Color3.new(0.3, 0.2, 0.2)
     farmButton.TextColor3 = Color3.new(1, 1, 1)
     farmButton.Font = Enum.Font.GothamBold
     farmButton.TextSize = 16
@@ -317,87 +203,42 @@ local function createMainUI()
         farmButton.Text = farmEnabled and "DỪNG FARM" or "BẮT ĐẦU FARM"
     end)
 
-    -- Status Indicator
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, 0, 0, 30)
-    statusLabel.Position = UDim2.new(0, 0, 0, 110)
-    statusLabel.Text = "TRẠNG THÁI: HOẠT ĐỘNG"
-    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    statusLabel.Font = Enum.Font.GothamBold
-    statusLabel.TextSize = 14
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Parent = controlsFrame
+    -- Status text
+    local statusText = Instance.new("TextLabel")
+    statusText.Size = UDim2.new(1, 0, 0, 30)
+    statusText.Position = UDim2.new(0, 0, 0.85, 0)
+    statusText.Text = "Trạng thái: Đang hoạt động"
+    statusText.TextColor3 = Color3.new(0, 1, 0)
+    statusText.Font = Enum.Font.GothamMedium
+    statusText.TextSize = 14
+    statusText.BackgroundTransparency = 1
+    statusText.Parent = uiContainer
 
-    -- Stats Updater
-    -- In your updateStats() function, replace the number formatting with this improved version:
-local function updateStats()
-    local leaderstats = player:FindFirstChild("leaderstats")
-    if leaderstats then
-        local coins = leaderstats:GetAttribute("Coins") or 0
-        local gems = leaderstats:GetAttribute("Gems") or 0
-        
-        -- Improved number formatting function
-        local function formatNumber(num)
-            -- Handle non-numbers or very small numbers
-            if type(num) ~= "number" or num == 0 then return "0" end
-            if num < 0 then return "-"..formatNumber(-num) end
-            if num < 1 then return string.format("%.2f", num) end
+    -- Update function for stats
+    local function updateStats()
+        local leaderstats = player:FindFirstChild("leaderstats")
+        if leaderstats then
+            local coins = leaderstats:GetAttribute("Coins") or 0
+            local gems = leaderstats:GetAttribute("Gems") or 0
             
-            -- Define suffixes for different magnitudes
-            local suffixes = {
-                {1e18, "E"},  -- Quintillion
-                {1e15, "P"},  -- Quadrillion
-                {1e12, "T"},  -- Trillion
-                {1e9,  "B"},  -- Billion
-                {1e6,  "M"},  -- Million
-                {1e3,  "K"}   -- Thousand
-            }
-            
-            -- Find the appropriate suffix
-            for _, suffixData in ipairs(suffixes) do
-                if num >= suffixData[1] then
-                    local formatted = num / suffixData[1]
-                    -- Show 2 decimal places if under 100, otherwise none
-                    if formatted < 100 then
-                        return string.format("%.2f", formatted)..suffixData[2]
-                    else
-                        return string.format("%.0f", formatted)..suffixData[2]
-                    end
-                end
-            end
-            
-            -- For numbers under 1000, show as-is with comma separators
-            return tostring(math.floor(num)):reverse():gsub("%d%d%d", "%1,")
-                   :reverse():gsub("^,", "")
+            -- Format numbers with commas
+            coinsText.Text = "Coins: "..tostring(coins):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
+            gemsText.Text = "Gems: "..tostring(gems):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
         end
-        
-        -- Apply formatting
-        coinsLabel.Text = "Coins: "..formatNumber(coins)
-        gemsLabel.Text = "Gems: "..formatNumber(gems)
     end
-end
+
     -- Update listeners
     RunService.Heartbeat:Connect(updateStats)
     player.CharacterAdded:Connect(function()
-        task.wait(2)
+        task.wait(1)
         updateStats()
     end)
 
     -- Initial update
     updateStats()
-
-    -- Animate UI entrance
-    uiContainer.Size = UDim2.new(0, 0, 0.7, 0)
-    uiContainer.Position = UDim2.new(0.01, 0, 0.15, 0)
-    TweenService:Create(uiContainer, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
-        Size = UDim2.new(0.3, 0, 0.7, 0),
-        Position = UDim2.new(0.02, 0, 0.15, 0)
-    }):Play()
-
-    mainUI.Parent = playerGui
 end
 
--- [5] FARMING FUNCTIONS
+-- [4] FARMING FUNCTIONS
 local function teleportToWinter()
     if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         player.Character.HumanoidRootPart.CFrame = WINTER_CFRAME
@@ -469,7 +310,7 @@ local function turnOnAutoClick()
     player:SetAttribute("AutoClick", true)
 end
 
--- [6] MAIN FARM LOOP
+-- [5] MAIN FARM LOOP
 local function mainFarm()
     turnOnAutoClick()
     mount()
@@ -503,32 +344,24 @@ local function mainFarm()
     end
 end
 
--- [7] INITIALIZATION
+-- [6] INITIALIZATION
 local function initialize()
-    if not checkEssentialElements() then
-        warn("Không thể tải một số thành phần quan trọng!")
-        return
-    end
+    -- Initial optimization
+    optimizeSystem()
     
-    for _, child in ipairs(playerGui:GetChildren()) do
-        child:Destroy()
-    end
-    updateProgress(0.9, "Đang tải tài nguyên...")
+    -- Wait for game to fully load
     ContentProvider:PreloadAsync({workspace, Lighting})
+    task.wait(3)
     
-    updateProgress(0.95, "Đang chuẩn bị giao diện...")
+    -- Create the combined UI
     createMainUI()
     
-    updateProgress(1, "Sẵn sàng!")
-    task.wait(1)
-    
-    -- Remove loading screen
-    optimizeSystem()
-
-    loadingScreen:Destroy()
     -- Start farming
     teleportToWinter()
     mainFarm()
+    
+    -- Set initial render state
+    RunService:Set3dRenderingEnabled(false)
 end
 
 -- Auto respawn handler
