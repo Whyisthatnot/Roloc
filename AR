@@ -8,6 +8,7 @@ local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
 local Terrain = workspace:FindFirstChildOfClass("Terrain")
 local ContentProvider = game:GetService("ContentProvider")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -46,7 +47,7 @@ loadScreen.Parent = playerGui
 -- [2] OPTIMIZATION FUNCTIONS
 local function cleanUI()
     for _, child in ipairs(playerGui:GetChildren()) do
-        if child.Name ~= "LoadingScreen" then
+        if child.Name ~= "LoadingScreen" and child.Name ~= "PlayerStatsUI" and child.Name ~= "AutoFarmGUI" then
             child:Destroy()
         end
     end
@@ -93,7 +94,7 @@ local function continuousOptimization()
     -- Monitor UI changes
     playerGui.ChildAdded:Connect(function(child)
         task.wait(0.1)
-        if child.Name ~= "LoadingScreen" then
+        if child.Name ~= "LoadingScreen" and child.Name ~= "PlayerStatsUI" and child.Name ~= "AutoFarmGUI" then
             cleanUI()
         end
     end)
@@ -118,6 +119,43 @@ local function continuousOptimization()
 end
 
 -- [4] GUI FUNCTIONS
+local function makeDraggable(gui, handle)
+    local dragging
+    local dragInput
+    local dragStart
+    local startPos
+
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = gui.AbsolutePosition
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            gui.Position = UDim2.new(
+                0, startPos.X + delta.X,
+                0, startPos.Y + delta.Y
+            )
+        end
+    end)
+end
+
 local function createStatsUI()
     local function formatNumber(num)
         if not num or type(num) ~= "number" then return "0" end
@@ -135,11 +173,12 @@ local function createStatsUI()
     -- Create UI
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "PlayerStatsUI"
-    screenGui.Parent = game:GetService("CoreGui")
+    screenGui.Parent = playerGui
+    screenGui.ResetOnSpawn = false
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 250, 0, 180)
-    frame.Position = UDim2.new(0.02, 0, 0.02, 0)
+    frame.Position = UDim2.new(0.02, 0, 0.3, 0)
     frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     frame.BackgroundTransparency = 0.2
     frame.BorderSizePixel = 0
@@ -186,6 +225,8 @@ local function createStatsUI()
     -- Main UI elements
     local titleLabel = createLabel("Title", UDim2.new(0.05, 0, 0.05, 0), true)
     titleLabel.Text = player.Name
+    titleLabel.Size = UDim2.new(0.9, 0, 0, 30)
+    makeDraggable(screenGui, titleLabel)
 
     createIcon("CoinsIcon", UDim2.new(0.05, 0, 0.35, 0), COINS_ICON)
     local coinsLabel = createLabel("CoinsLabel", UDim2.new(0.15, 0, 0.35, 0))
@@ -220,22 +261,48 @@ end
 local function createControlGUI()
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "AutoFarmGUI"
-    ScreenGui.Parent = game.CoreGui
+    ScreenGui.Parent = playerGui
+    ScreenGui.ResetOnSpawn = false
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 160, 0, 160)
+    mainFrame.Position = UDim2.new(0.02, 0, 0.02, 0)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    mainFrame.BackgroundTransparency = 0.2
+    mainFrame.BorderSizePixel = 0
+    mainFrame.ClipsDescendants = true
+    mainFrame.Parent = ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = mainFrame
+
+    -- Title bar for dragging
+    local titleBar = Instance.new("TextLabel")
+    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.Position = UDim2.new(0, 0, 0, 0)
+    titleBar.Text = "Auto Farm Controls"
+    titleBar.TextColor3 = Color3.fromRGB(255, 215, 100)
+    titleBar.BackgroundTransparency = 1
+    titleBar.Font = Enum.Font.GothamBlack
+    titleBar.TextSize = 16
+    titleBar.Parent = mainFrame
+    makeDraggable(ScreenGui, titleBar)
 
     -- Render Toggle Button
     local renderToggleButton = Instance.new("TextButton")
-    renderToggleButton.Size = UDim2.new(0, 120, 0, 40)
-    renderToggleButton.Position = UDim2.new(0, 20, 0, 70)
+    renderToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
+    renderToggleButton.Position = UDim2.new(0.1, 0, 0.25, 0)
     renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
     renderToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     renderToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     renderToggleButton.Font = Enum.Font.GothamBold
     renderToggleButton.TextSize = 14
-    renderToggleButton.Parent = ScreenGui
+    renderToggleButton.Parent = mainFrame
     
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = renderToggleButton
+    local cornerBtn = Instance.new("UICorner")
+    cornerBtn.CornerRadius = UDim.new(0, 6)
+    cornerBtn.Parent = renderToggleButton
 
     renderToggleButton.MouseButton1Click:Connect(function()
         isRenderOff = not isRenderOff
@@ -245,18 +312,18 @@ local function createControlGUI()
 
     -- Farm Toggle Button
     local farmToggleButton = Instance.new("TextButton")
-    farmToggleButton.Size = UDim2.new(0, 120, 0, 40)
-    farmToggleButton.Position = UDim2.new(0, 20, 0, 120)
+    farmToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
+    farmToggleButton.Position = UDim2.new(0.1, 0, 0.6, 0)
     farmToggleButton.Text = farmEnabled and "Tắt Auto Farm" or "Bật Auto Farm"
     farmToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     farmToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     farmToggleButton.Font = Enum.Font.GothamBold
     farmToggleButton.TextSize = 14
-    farmToggleButton.Parent = ScreenGui
+    farmToggleButton.Parent = mainFrame
     
-    local corner2 = Instance.new("UICorner")
-    corner2.CornerRadius = UDim.new(0, 6)
-    corner2.Parent = farmToggleButton
+    local cornerBtn2 = Instance.new("UICorner")
+    cornerBtn2.CornerRadius = UDim.new(0, 6)
+    cornerBtn2.Parent = farmToggleButton
 
     farmToggleButton.MouseButton1Click:Connect(function()
         farmEnabled = not farmEnabled
@@ -406,10 +473,9 @@ player.CharacterAdded:Connect(function(character)
     character:WaitForChild("HumanoidRootPart")
     task.wait(2)
     if farmEnabled then
-        teleportToWinter()
-        mainfarm()
+\        mainfarm()
     end
 end)
 
 -- Start everything
-initialize()
+initialize()v
