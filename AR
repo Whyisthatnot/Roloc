@@ -478,4 +478,4 @@ player.CharacterAdded:Connect(function(character)
 end)
 
 -- Start everything
-initialize()v
+initialize()
