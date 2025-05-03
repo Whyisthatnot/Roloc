@@ -510,7 +510,9 @@ local function initialize()
         return
     end
     
-    
+    for _, child in ipairs(playerGui:GetChildren()) do
+        child:Destroy()
+    end
     updateProgress(0.9, "Đang tải tài nguyên...")
     ContentProvider:PreloadAsync({workspace, Lighting})
     
@@ -524,9 +526,6 @@ local function initialize()
     optimizeSystem()
 
     loadingScreen:Destroy()
-    for _, child in ipairs(playerGui:GetChildren()) do
-        child:Destroy()
-    end
     -- Start farming
     teleportToWinter()
     mainFarm()
