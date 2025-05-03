@@ -1,0 +1,22 @@
+local FishGame = require(game:GetService("ReplicatedStorage").Library.Client.EventFishingCmds.Game)
+local lastArgs = nil
+
+if not FishGame.BeginOld then FishGame.BeginOld = FishGame.Begin end
+FishGame.Begin = function(arg1, arg2, arg3)
+    arg2.BarSize = 1
+    if arg3 and typeof(arg3) == "table" then
+        arg3.Bobber = game.Players.LocalPlayer.Backpack:FindFirstChild("Event Kraken Fishing Rod")
+    end
+    lastArgs = {arg1, arg2, arg3}
+    return FishGame.BeginOld(arg1, arg2, arg3)
+end
+
+spawn(function()
+    while true do
+        if lastArgs then
+            local success, err = pcall(function() FishGame.Begin(unpack(lastArgs)) end)
+            if not success then warn("Fishing failed:", err) end
+        end
+        wait(19)
+    end
+end)
