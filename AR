@@ -329,37 +329,53 @@ local function createMainUI()
     statusLabel.Parent = controlsFrame
 
     -- Stats Updater
-    local function updateStats()
+    -- In your updateStats() function, replace the number formatting with this improved version:
+local function updateStats()
     local leaderstats = player:FindFirstChild("leaderstats")
     if leaderstats then
         local coins = leaderstats:GetAttribute("Coins") or 0
         local gems = leaderstats:GetAttribute("Gems") or 0
         
-        -- Hàm format số lớn với hậu tố (k, M, B, T,...)
-        local function formatBigNumber(num)
-            if num < 1000 then return tostring(num) end
+        -- Improved number formatting function
+        local function formatNumber(num)
+            -- Handle non-numbers or very small numbers
+            if type(num) ~= "number" or num == 0 then return "0" end
+            if num < 0 then return "-"..formatNumber(-num) end
+            if num < 1 then return string.format("%.2f", num) end
             
-            local suffixes = {"", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "N"}
-            local power = math.floor(math.log(num, 1000))
-            local suffix = suffixes[power] or ""
-            local formatted = string.format("%.2f", num / (1000 ^ power))
+            -- Define suffixes for different magnitudes
+            local suffixes = {
+                {1e18, "E"},  -- Quintillion
+                {1e15, "P"},  -- Quadrillion
+                {1e12, "T"},  -- Trillion
+                {1e9,  "B"},  -- Billion
+                {1e6,  "M"},  -- Million
+                {1e3,  "K"}   -- Thousand
+            }
             
-            -- Loại bỏ .00 nếu không cần thiết
-            formatted = formatted:gsub("%.00", ""):gsub("%.0", "")
-            return formatted .. suffix
+            -- Find the appropriate suffix
+            for _, suffixData in ipairs(suffixes) do
+                if num >= suffixData[1] then
+                    local formatted = num / suffixData[1]
+                    -- Show 2 decimal places if under 100, otherwise none
+                    if formatted < 100 then
+                        return string.format("%.2f", formatted)..suffixData[2]
+                    else
+                        return string.format("%.0f", formatted)..suffixData[2]
+                    end
+                end
+            end
+            
+            -- For numbers under 1000, show as-is with comma separators
+            return tostring(math.floor(num)):reverse():gsub("%d%d%d", "%1,")
+                   :reverse():gsub("^,", "")
         end
         
-        -- Hàm format số scientific notation khi quá lớn
-        local function formatScientific(num)
-            if num < 1e21 then return formatBigNumber(num) end
-            return string.format("%.2e", num):gsub("%+0", ""):gsub("e0", "e")
-        end
-        
-        coinsLabel.Text = "Coins: " .. formatScientific(coins)
-        gemsLabel.Text = "Gems: " .. formatScientific(gems)
+        -- Apply formatting
+        coinsLabel.Text = "Coins: "..formatNumber(coins)
+        gemsLabel.Text = "Gems: "..formatNumber(gems)
     end
 end
-
     -- Update listeners
     RunService.Heartbeat:Connect(updateStats)
     player.CharacterAdded:Connect(function()
