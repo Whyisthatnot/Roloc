@@ -1,5 +1,9 @@
-if not game:IsLoaded() then repeat game.Loaded:Wait() until game:IsLoaded() end
+-- Wait for game to load
+if not game:IsLoaded() then 
+    repeat task.wait() until game:IsLoaded() 
+end
 task.wait(5)
+
 -- Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,7 +13,9 @@ local Lighting = game:GetService("Lighting")
 local Terrain = workspace:FindFirstChildOfClass("Terrain")
 local ContentProvider = game:GetService("ContentProvider")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 
+-- Player setup
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local dataRemoteEvent = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
@@ -20,33 +26,46 @@ local WINTER_CFRAME = CFrame.new(4623.21924, 248.286758, -1932.66699, -0.4807124
 local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
 local farmEnabled = true
 local isRenderOff = true
--- [1] LOADING SCREEN
-local loadScreen = Instance.new("ScreenGui")
-loadScreen.Name = "LoadingScreen"
-loadScreen.IgnoreGuiInset = true
-loadScreen.DisplayOrder = 9999
 
-local loadFrame = Instance.new("Frame")
-loadFrame.Size = UDim2.new(1, 0, 1, 0)
-loadFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-loadFrame.Parent = loadScreen
+-- Anti-AFK function
+local function antiAFK()
+    while true do
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+        task.wait(30)
+    end
+end
 
-local loadText = Instance.new("TextLabel")
-loadText.Size = UDim2.new(1, 0, 0, 50)
-loadText.Position = UDim2.new(0, 0, 0.5, -25)
-loadText.BackgroundTransparency = 1
-loadText.Text = "Đang tối ưu hóa game, vui lòng chờ..."
-loadText.TextColor3 = Color3.new(1, 1, 1)
-loadText.Font = Enum.Font.SourceSansBold
-loadText.TextSize = 24
-loadText.Parent = loadFrame
+-- Loading screen
+local function createLoadingScreen()
+    local loadScreen = Instance.new("ScreenGui")
+    loadScreen.Name = "LoadingScreen"
+    loadScreen.IgnoreGuiInset = true
+    loadScreen.DisplayOrder = 9999
 
-loadScreen.Parent = playerGui
+    local loadFrame = Instance.new("Frame")
+    loadFrame.Size = UDim2.new(1, 0, 1, 0)
+    loadFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+    loadFrame.Parent = loadScreen
 
--- [2] OPTIMIZATION FUNCTIONS
+    local loadText = Instance.new("TextLabel")
+    loadText.Size = UDim2.new(1, 0, 0, 50)
+    loadText.Position = UDim2.new(0, 0, 0.5, -25)
+    loadText.BackgroundTransparency = 1
+    loadText.Text = "Đang tối ưu hóa game, vui lòng chờ..."
+    loadText.TextColor3 = Color3.new(1, 1, 1)
+    loadText.Font = Enum.Font.SourceSansBold
+    loadText.TextSize = 24
+    loadText.Parent = loadFrame
+
+    loadScreen.Parent = playerGui
+    return loadScreen
+end
+
+-- Optimization functions
 local function cleanUI()
     for _, child in ipairs(playerGui:GetChildren()) do
-        if child.Name ~= "LoadingScreen" and child.Name ~= "PlayerStatsUI" and child.Name ~= "AutoFarmGUI" then
+        if child.Name ~= "LoadingScreen" then
             child:Destroy()
         end
     end
@@ -75,12 +94,8 @@ local function optimizeSystem()
             obj.Transparency = 1
         elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
             obj.Enabled = false
-        end
-    end
-
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CastShadow = false
+        elseif obj:IsA("BasePart") then
+            obj.CastShadow = false
         end
     end
 
@@ -88,41 +103,9 @@ local function optimizeSystem()
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 end
 
--- [3] CONTINUOUS OPTIMIZATION
-local function continuousOptimization()
-    -- Monitor UI changes
-    playerGui.ChildAdded:Connect(function(child)
-        task.wait(0.1)
-        if child.Name ~= "LoadingScreen" and child.Name ~= "PlayerStatsUI" and child.Name ~= "AutoFarmGUI" then
-            cleanUI()
-        end
-    end)
-
-    -- Monitor new game objects
-    game.DescendantAdded:Connect(function(descendant)
-        task.wait()
-        if descendant:IsA("Decal") or descendant:IsA("Texture") then
-            descendant.Transparency = 1
-        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") then
-            descendant.Enabled = false
-        elseif descendant:IsA("BasePart") then
-            descendant.CastShadow = false
-        end
-    end)
-
-    -- Periodic optimization
-    while task.wait(30) do
-        optimizeSystem()
-        cleanUI()
-    end
-end
-
--- [4] GUI FUNCTIONS
+-- GUI functions
 local function makeDraggable(gui, handle)
-    local dragging
-    local dragInput
-    local dragStart
-    local startPos
+    local dragging, dragInput, dragStart, startPos
 
     handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -248,13 +231,22 @@ local function createStatsUI()
     end
 
     -- Update listeners
-    RunService.Heartbeat:Connect(updateUI)
+    local heartbeatConnection
+    heartbeatConnection = RunService.Heartbeat:Connect(updateUI)
+    
     player.CharacterAdded:Connect(function()
         task.wait(1)
         updateUI()
     end)
 
     updateUI()
+    
+    return {
+        Destroy = function()
+            heartbeatConnection:Disconnect()
+            screenGui:Destroy()
+        end
+    }
 end
 
 local function createControlGUI()
@@ -330,10 +322,12 @@ local function createControlGUI()
     end)
 
     -- Initial render state
-    RunService:Set3dRenderingEnabled(false)
+    RunService:Set3dRenderingEnabled(not isRenderOff)
+    
+    return ScreenGui
 end
 
--- [5] FARMING FUNCTIONS
+-- Farming functions
 local function teleportToWinter()
     if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         player.Character.HumanoidRootPart.CFrame = WINTER_CFRAME
@@ -356,9 +350,9 @@ local function disMount()
     }, "\11"})
 end
 
-local enemiesFolder = workspace.__Main.__Enemies.Server
-
 local function findAliveEnemy(targetID)
+    local enemiesFolder = workspace.__Main.__Enemies.Server
+    
     local function search(folder)
         for _, enemy in ipairs(folder:GetChildren()) do
             if enemy:GetAttribute("Id") == targetID and enemy:GetAttribute("HP") > 0 then
@@ -372,6 +366,7 @@ local function findAliveEnemy(targetID)
         end
         return nil
     end
+    
     return search(enemiesFolder)
 end
 
@@ -405,8 +400,8 @@ local function turnOnAutoClick()
     player:SetAttribute("AutoClick", true)
 end
 
--- [6] MAIN FARM LOOP
-local function mainfarm()
+-- Main farm loop
+local function mainFarm()
     turnOnAutoClick()
     mount()
     task.wait(1.5)
@@ -439,8 +434,11 @@ local function mainfarm()
     end
 end
 
--- [7] INITIALIZATION
+-- Initialization
 local function initialize()
+    -- Create loading screen
+    local loadingScreen = createLoadingScreen()
+    
     -- Initial optimization
     optimizeSystem()
     cleanUI()
@@ -450,19 +448,20 @@ local function initialize()
     task.wait(3)
     
     -- Remove loading screen
-    if loadScreen then
-        loadScreen:Destroy()
-    end
+    loadingScreen:Destroy()
     
     -- Create UIs
     createStatsUI()
     createControlGUI()
     
-    -- Start continuous optimization
-    coroutine.wrap(continuousOptimization)()
+    -- Start anti-AFK in background
+    coroutine.wrap(antiAFK)()
+    
+    -- Teleport to winter area
+    teleportToWinter()
     
     -- Start farming
-    mainfarm()
+    mainFarm()
     
     print("✅ FPS Boost VIP Activated!")
 end
@@ -472,18 +471,10 @@ player.CharacterAdded:Connect(function(character)
     character:WaitForChild("HumanoidRootPart")
     task.wait(2)
     if farmEnabled then
-        mainfarm()
+        teleportToWinter()
+        mainFarm()
     end
 end)
--- Simple Anti-AFK Script (Press F9 to stop)
-local VirtualUser = game:GetService("VirtualUser")
-local player = game:GetService("Players").LocalPlayer
-print("Anti-AFK")
-while true do
-    VirtualUser:CaptureController() -- Prevents AFK
-    VirtualUser:ClickButton2(Vector2.new()) -- Simulates a small mouse movement
-    wait(30) -- Adjust time (in seconds) if needed
-end
 
 -- Start everything
 initialize()
