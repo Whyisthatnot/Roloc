@@ -395,7 +395,6 @@ local function initialize()
     coroutine.wrap(continuousOptimization)()
     
     -- Start farming
-    teleportToWinter()
     mainfarm()
     
     print("✅ FPS Boost VIP Activated!")
