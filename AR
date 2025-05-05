@@ -418,9 +418,7 @@ local function autoAttack(name,pos)
             PetPos[pet.Name] = defaultVector
         end
     end
-    for petName, position in pairs(PetPos) do
-        print("🐾 Pet:", petName, "📍 Pos:", position)
-    end
+    
     
     local args = {{
         {
