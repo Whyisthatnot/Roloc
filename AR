@@ -1,8 +1,7 @@
--- Wait for game to load
+repeat wait() until game:IsLoaded() and game.Players.LocalPlayer 
 if not game:IsLoaded() then 
     repeat task.wait() until game:IsLoaded() 
 end
-task.wait(3)
 
 -- Services
 local Players = game:GetService("Players")
@@ -24,6 +23,7 @@ local dataRemoteEvent = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChil
 local TELEPORT_DELAY = 0.8
 local WINTER_CFRAME = CFrame.new(4623.21924, 248.286758, -1932.66699, -0.480712414, -0.876878381, 2.60472298e-05, -2.60472298e-05, 4.38690186e-05, 1, -0.876878381, 0.480712384, -4.39882278e-05)
 local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
+local KINDAMA_CFRAME = CFrame.new(-4487.57031, 32.6948891, 5918.12744, -0.384795666, 0, -0.923001766, 0, 1, 0, 0.923001766, 0, -0.384795666)
 local farmEnabled = true
 local isRenderOff = true
 
@@ -34,6 +34,55 @@ local function antiAFK()
         VirtualUser:ClickButton2(Vector2.new())
         task.wait(30)
     end
+end
+
+local function teleportToKindama()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = KINDAMA_CFRAME
+        task.wait(TELEPORT_DELAY)
+    end
+end
+
+
+
+local function findAliveEnemy(targetID)
+    local enemiesFolder = workspace.__Main.__Enemies.Server
+    
+    local function search(folder)
+        for _, enemy in ipairs(folder:GetChildren()) do
+            if enemy:GetAttribute("Id") == targetID and enemy:GetAttribute("HP") > 0 then
+                return enemy 
+            elseif enemy:IsA("Folder") then
+                local found = search(enemy)
+                if found then
+                    return found
+                end
+            end
+        end
+        return nil
+    end
+    
+    return search(enemiesFolder)
+end
+
+local function findAliveEnemy(targetID)
+    local enemiesFolder = workspace.__Main.__Enemies.Server
+    
+    local function search(folder)
+        for _, enemy in ipairs(folder:GetChildren()) do
+            if enemy:GetAttribute("Id") == targetID and enemy:GetAttribute("HP") > 0 then
+                return enemy 
+            elseif enemy:IsA("Folder") then
+                local found = search(enemy)
+                if found then
+                    return found
+                end
+            end
+        end
+        return nil
+    end
+    
+    return search(enemiesFolder)
 end
 
 -- Loading screen
@@ -65,6 +114,7 @@ end
 -- Optimization functions
 local function cleanUI()
     for _, child in ipairs(playerGui:GetChildren()) do
+        task.wait(0.1)
         if child.Name ~= "LoadingScreen" then
             child:Destroy()
         end
@@ -255,8 +305,9 @@ local function createControlGUI()
     ScreenGui.Parent = playerGui
     ScreenGui.ResetOnSpawn = false
 
+    -- Giảm kích thước main frame
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 160, 0, 160)
+    mainFrame.Size = UDim2.new(0, 120, 0, 100)  -- Giảm từ 160x160 xuống 120x100
     mainFrame.Position = UDim2.new(0.02, 0, 0.02, 0)
     mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     mainFrame.BackgroundTransparency = 0.2
@@ -265,75 +316,80 @@ local function createControlGUI()
     mainFrame.Parent = ScreenGui
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
+    corner.CornerRadius = UDim.new(0, 6)  -- Giảm góc bo từ 8 xuống 6
     corner.Parent = mainFrame
 
-    -- Title bar for dragging
     local titleBar = Instance.new("TextLabel")
-    titleBar.Size = UDim2.new(1, 0, 0, 30)
-    titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.Text = "Auto Farm Controls"
+    titleBar.Size = UDim2.new(1, 0, 0, 24)  -- Giảm chiều cao từ 30 xuống 24
+    titleBar.Text = "Auto Farm"
     titleBar.TextColor3 = Color3.fromRGB(255, 215, 100)
     titleBar.BackgroundTransparency = 1
-    titleBar.Font = Enum.Font.GothamBlack
-    titleBar.TextSize = 16
+    titleBar.Font = Enum.Font.GothamMedium  -- Đổi font cho gọn
+    titleBar.TextSize = 14  -- Giảm từ 16 xuống 14
     titleBar.Parent = mainFrame
     makeDraggable(ScreenGui, titleBar)
 
-    -- Render Toggle Button
     local renderToggleButton = Instance.new("TextButton")
-    renderToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
-    renderToggleButton.Position = UDim2.new(0.1, 0, 0.25, 0)
+    renderToggleButton.Size = UDim2.new(0.85, 0, 0, 28)  -- Giảm kích thước
+    renderToggleButton.Position = UDim2.new(0.075, 0, 0.3, 0)  -- Điều chỉnh vị trí
     renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
-    renderToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    renderToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
     renderToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    renderToggleButton.Font = Enum.Font.GothamBold
-    renderToggleButton.TextSize = 14
+    renderToggleButton.Font = Enum.Font.Gotham  -- Đổi font
+    renderToggleButton.TextSize = 12  -- Giảm kích thước chữ
     renderToggleButton.Parent = mainFrame
     
     local cornerBtn = Instance.new("UICorner")
-    cornerBtn.CornerRadius = UDim.new(0, 6)
+    cornerBtn.CornerRadius = UDim.new(0, 5)  -- Giảm góc bo
     cornerBtn.Parent = renderToggleButton
 
+    -- Nút farm nhỏ hơn
+    local farmToggleButton = Instance.new("TextButton")
+    farmToggleButton.Size = UDim2.new(0.85, 0, 0, 28)  -- Đồng bộ kích thước
+    farmToggleButton.Position = UDim2.new(0.075, 0, 0.65, 0)  -- Căn chỉnh vị trí
+    farmToggleButton.Text = farmEnabled and "Tắt Farm" or "Bật Farm"  -- Rút gọn text
+    farmToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    farmToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    farmToggleButton.Font = Enum.Font.Gotham
+    farmToggleButton.TextSize = 12
+    farmToggleButton.Parent = mainFrame
+    
+    local cornerBtn2 = Instance.new("UICorner")
+    cornerBtn2.CornerRadius = UDim.new(0, 5)
+    cornerBtn2.Parent = farmToggleButton
+
+    -- Thêm hiệu ứng hover
+    local function buttonHoverEffect(button)
+        button.MouseEnter:Connect(function()
+            button.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        end)
+        
+        button.MouseLeave:Connect(function()
+            button.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+        end)
+    end
+
+    buttonHoverEffect(renderToggleButton)
+    buttonHoverEffect(farmToggleButton)
+
+    -- Xử lý sự kiện click
     renderToggleButton.MouseButton1Click:Connect(function()
         isRenderOff = not isRenderOff
         RunService:Set3dRenderingEnabled(not isRenderOff)
         renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
     end)
 
-    -- Farm Toggle Button
-    local farmToggleButton = Instance.new("TextButton")
-    farmToggleButton.Size = UDim2.new(0.8, 0, 0, 40)
-    farmToggleButton.Position = UDim2.new(0.1, 0, 0.6, 0)
-    farmToggleButton.Text = farmEnabled and "Tắt Auto Farm" or "Bật Auto Farm"
-    farmToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    farmToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    farmToggleButton.Font = Enum.Font.GothamBold
-    farmToggleButton.TextSize = 14
-    farmToggleButton.Parent = mainFrame
-    
-    local cornerBtn2 = Instance.new("UICorner")
-    cornerBtn2.CornerRadius = UDim.new(0, 6)
-    cornerBtn2.Parent = farmToggleButton
-
     farmToggleButton.MouseButton1Click:Connect(function()
         farmEnabled = not farmEnabled
-        farmToggleButton.Text = farmEnabled and "Tắt Auto Farm" or "Bật Auto Farm"
+        farmToggleButton.Text = farmEnabled and "Tắt Farm" or "Bật Farm"
     end)
 
-    -- Initial render state
     RunService:Set3dRenderingEnabled(not isRenderOff)
     
     return ScreenGui
 end
 
--- Farming functions
-local function teleportToWinter()
-    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        player.Character.HumanoidRootPart.CFrame = WINTER_CFRAME
-        task.wait(TELEPORT_DELAY)
-    end
-end
+
 
 local function mount()
     dataRemoteEvent:FireServer({{
@@ -383,6 +439,58 @@ local function punchAttack(enemyData)
     dataRemoteEvent:FireServer(unpack(args))
 end
 
+local function autoAttack(name,pos)
+    task.wait(0.6)
+    local player = Players.LocalPlayer
+    local playerId = tostring(player.UserId)
+    
+    -- Lấy folder pet của người chơi
+    local playerFolder = workspace.__Main.__Pets:FindFirstChild(playerId)
+    if not playerFolder then
+        warn("📦 Không tìm thấy folder pet cho ID:", playerId)
+        return
+    end
+
+    -- Tạo vector từ vị trí kẻ địch
+    local defaultVector = pos
+	
+    -- Tạo bảng PetPos
+    local PetPos = {}
+    for _, pet in ipairs(playerFolder:GetChildren()) do
+        if pet:IsA("Folder") then
+            PetPos[pet.Name] = defaultVector
+        end
+    end
+    for petName, position in pairs(PetPos) do
+        print("🐾 Pet:", petName, "📍 Pos:", position)
+    end
+    
+    local args = {{
+        {
+            PetPos = PetPos,
+            AttackType = "All",
+            Event = "Attack",
+            Enemy = name
+        },
+        "\006"
+    }}
+
+    dataRemoteEvent:FireServer(unpack(args))
+    task.wait(0.1)
+    local args = {
+        {
+            {
+                Event = "ShowPets"
+            },
+            "\006"
+        }
+    }
+    game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+    
+end
+
+
+
 local function destroyEnemy(enemyData)
     local args = {
         {
@@ -396,85 +504,159 @@ local function destroyEnemy(enemyData)
     dataRemoteEvent:FireServer(unpack(args))
 end
 
+local function ariseEnemy(enemyData)
+    local args = {
+        {
+            {
+                Event = "EnemyCapture",
+                Enemy = enemyData
+            },
+            "\005"
+        }
+    }
+    dataRemoteEvent:FireServer(unpack(args))
+end
+
 local function turnOnAutoClick()
     player:SetAttribute("AutoClick", true)
 end
+local function handleWinterBoss()
+    isHandlingBoss = true
+    farmEnabled = false
 
--- Main farm loop
-local function mainFarm()
-    turnOnAutoClick()
-    mount()
-    task.wait(1.5)
-    disMount()
-    
-    while farmEnabled and task.wait() do
-        for _, enemyID in ipairs(enemyIDList) do
-            local enemyData = findAliveEnemy(enemyID)
-            while enemyData and farmEnabled do
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
-                end
-                
-                repeat
-                    punchAttack(enemyData.Name)
-                    task.wait(0.1)
-                until not enemyData or enemyData:GetAttribute("HP") == 0 or not farmEnabled
-                
-                if enemyData and enemyData:GetAttribute("HP") == 0 then
-                    for _ = 1, 5 do
-                        destroyEnemy(enemyData.Name)
-                        task.wait(0.3)
-                    end
-                end
-                
-                task.wait(TELEPORT_DELAY)
-                enemyData = findAliveEnemy(enemyID)
-            end
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        warn("⚠️ Nhân vật không tồn tại!")
+        isHandlingBoss = false
+        farmEnabled = true
+        return
+    end
+    local humanoidRootPart = character.HumanoidRootPart
+
+    local success = pcall(function()
+        humanoidRootPart.CFrame = WINTER_CFRAME
+        task.wait(TELEPORT_DELAY)
+    end)
+    if not success then
+        warn("❌ Lỗi teleport winter")
+        isHandlingBoss = false
+        farmEnabled = true
+        return
+    end
+
+    local bossData
+    local ok, err = pcall(function()
+        bossData = findAliveEnemy("WBoss")
+    end)
+    if not ok or not bossData then
+        warn("❌ Không tìm thấy boss:", err)
+        pcall(teleportToKindama)
+        isHandlingBoss = false
+        farmEnabled = true
+        return
+    end
+
+    local bossHRP = bossData:FindFirstChild("HumanoidRootPart")
+    if bossHRP then
+        humanoidRootPart.CFrame = bossHRP.CFrame * CFrame.new(0, 3, -5)
+    end
+
+    while bossData and bossData:GetAttribute("HP") and bossData:GetAttribute("HP") > 0 do
+        pcall(autoAttack, bossData.Name, bossData.Position)
+        pcall(punchAttack, bossData.Name)
+        task.wait(0.1)
+    end
+
+    if bossData and bossData:GetAttribute("HP") and bossData:GetAttribute("HP") <= 0 then
+        for _ = 1, 5 do
+            pcall(ariseEnemy, bossData.Name)
+            task.wait(0.3)
         end
     end
+
+    pcall(teleportToKindama)
+    print("✅ Boss xử lý xong, quay lại farm")
+
+    isHandlingBoss = false
+    farmEnabled = true
 end
+
+local isHandlingBoss = false
+local isFarming = false
+local function mainFarm()
+    task.spawn(function()
+        isFarming = true
+        mount()
+        task.wait(1.5)
+        disMount()
+
+        while true do
+            -- Ngưng farm nếu boss đang xử lý
+            if not farmEnabled or isHandlingBoss then
+                task.wait(0.2)
+                continue
+            end
+
+            for _, enemyID in ipairs(enemyIDList) do
+                local enemyData = findAliveEnemy(enemyID)
+                while enemyData and farmEnabled and not isHandlingBoss do
+                    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                        player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
+                    end
+
+                    punchAttack(enemyData.Name)
+                    autoAttack(enemyData.Name, enemyData.Position)
+
+                    while enemyData:GetAttribute("HP") > 0 and farmEnabled and not isHandlingBoss do
+                        task.wait(0.1)
+                    end
+
+                    if farmEnabled and not isHandlingBoss then
+                        for _ = 1, 5 do
+                            destroyEnemy(enemyData.Name)
+                            task.wait(0.3)
+                        end
+                    end
+
+                    task.wait(TELEPORT_DELAY)
+                    enemyData = findAliveEnemy(enemyID)
+                end
+            end
+        end
+    end)
+end
+local function startBossTimerChecker()
+    task.spawn(function()
+        while true do
+            local minutes = os.date("*t").min
+            if minutes >= 11 and minutes < 25 then
+                if not isHandlingBoss then
+                    print("⏳ Đang vào giai đoạn boss... Xử lý!")
+                    handleWinterBoss()
+                end
+            end
+            task.wait(5)
+        end
+    end)
+end
+
 
 -- Initialization
 local function initialize()
-    -- Create loading screen
-    local loadingScreen = createLoadingScreen()
-    
-    -- Initial optimization
-    optimizeSystem()
-    cleanUI()
-    
-    -- Wait for game to fully load
-    ContentProvider:PreloadAsync({workspace, Lighting})
     task.wait(3)
-    
-    -- Remove loading screen
-    loadingScreen:Destroy()
-    
-    -- Create UIs
+    local loadingScreen = createLoadingScreen()
+    ContentProvider:PreloadAsync({workspace, Lighting})
+    task.wait(0.5)
+    cleanUI()
+    optimizeSystem()
     createStatsUI()
+    loadingScreen:Destroy()
     createControlGUI()
-    
-    -- Start anti-AFK in background
     coroutine.wrap(antiAFK)()
-    
-    -- Teleport to winter area
-    teleportToWinter()
-    
-    -- Start farming
     mainFarm()
-    
+    startBossTimerChecker()
     print("✅ FPS Boost VIP Activated!")
 end
+mainFarm()
+startBossTimerChecker()
 
--- Auto respawn handler
-player.CharacterAdded:Connect(function(character)
-    character:WaitForChild("HumanoidRootPart")
-    task.wait(2)
-    if farmEnabled then
-        teleportToWinter()
-        mainFarm()
-    end
-end)
-
--- Start everything
-initialize()
