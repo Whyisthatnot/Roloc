@@ -20,8 +20,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 local dataRemoteEvent = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
 
 -- Configuration
-local TELEPORT_DELAY = 0.8
-local WINTER_CFRAME = CFrame.new(4623.21924, 248.286758, -1932.66699, -0.480712414, -0.876878381, 2.60472298e-05, -2.60472298e-05, 4.38690186e-05, 1, -0.876878381, 0.480712384, -4.39882278e-05)
+local TELEPORT_DELAY = 0.7
 local enemyIDList = {"DAMB1","DAMB2","DAMB3"}
 local KINDAMA_CFRAME = CFrame.new(-4487.57031, 32.6948891, 5918.12744, -0.384795666, 0, -0.923001766, 0, 1, 0, 0.923001766, 0, -0.384795666)
 local farmEnabled = true
@@ -42,6 +41,7 @@ local function teleportToKindama()
         task.wait(TELEPORT_DELAY)
     end
 end
+
 -- Loading screen
 local function createLoadingScreen()
     local loadScreen = Instance.new("ScreenGui")
@@ -346,8 +346,6 @@ local function createControlGUI()
     return ScreenGui
 end
 
-
-
 local function mount()
     dataRemoteEvent:FireServer({{
         Action = "Mount",
@@ -419,7 +417,6 @@ local function autoAttack(name,pos)
         end
     end
     
-    
     local args = {{
         {
             PetPos = PetPos,
@@ -431,20 +428,7 @@ local function autoAttack(name,pos)
     }}
 
     dataRemoteEvent:FireServer(unpack(args))
-    task.wait(0.1)
-    local args = {
-        {
-            {
-                Event = "ShowPets"
-            },
-            "\006"
-        }
-    }
-    game:GetService("ReplicatedStorage"):WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-    
 end
-
-
 
 local function destroyEnemy(enemyData)
     local args = {
@@ -475,42 +459,39 @@ end
 local function turnOnAutoClick()
     player:SetAttribute("AutoClick", true)
 end
-local isHandlingBoss = false
-local isFarming = false
 
 local function mainFarm()
     task.spawn(function()
-        isFarming = true
         mount()
-        task.wait(1.5)
+        task.wait(0.5)
         disMount()
 
         while true do
-            -- Nếu đang xử lý boss hoặc tắt farm thì dừng
-            if not farmEnabled or isHandlingBoss then
+            -- Nếu tắt farm thì dừng
+            if not farmEnabled then
                 task.wait(0.5)
-                continue
+                break
             end
 
             for _, enemyID in ipairs(enemyIDList) do
-                if not farmEnabled or isHandlingBoss then break end
+                if not farmEnabled then break end
 
                 local enemyData = findAliveEnemy(enemyID)
-                while enemyData and farmEnabled and not isHandlingBoss do
+                while enemyData and farmEnabled do
                     -- Dịch chuyển tới quái
                     if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                         player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
                     end
 
-                    punchAttack(enemyData.Name)
                     autoAttack(enemyData.Name, enemyData.Position)
 
                     -- Đợi đánh quái
-                    while enemyData and enemyData:GetAttribute("HP") > 0 and farmEnabled and not isHandlingBoss do
+                    while enemyData and enemyData:GetAttribute("HP") > 0 and farmEnabled do
+                        punchAttack(enemyData.Name)
                         task.wait(0.1)
                     end
 
-                    if not farmEnabled or isHandlingBoss then break end
+                    if not farmEnabled then break end
 
                     -- Tiêu diệt quái sau khi HP = 0
                     for _ = 1, 5 do
@@ -528,102 +509,19 @@ local function mainFarm()
     end)
 end
 
-local function handleWinterBoss()
-    if isHandlingBoss then return end -- Đã xử lý thì thôi
-
-    isHandlingBoss = true
-    farmEnabled = false
-
-    -- Xử lý boss
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then
-        warn("⚠️ Không có nhân vật!")
-        isHandlingBoss = false
-        farmEnabled = true
-        return
-    end
-
-    -- Teleport tới vị trí boss
-    pcall(function()
-        character.HumanoidRootPart.CFrame = WINTER_CFRAME
-        task.wait(TELEPORT_DELAY)
-    end)
-
-    -- Tìm boss
-    local bossData
-    local success, err = pcall(function()
-        bossData = findAliveEnemy("WBoss")
-    end)
-
-    if not success or not bossData then
-        -- 🛑 Boss không còn (do bị người khác kill mất)
-        warn("❌ Boss không còn, tiếp tục farm thường.")
-        pcall(teleportToKindama)
-
-        -- RESET TRẠNG THÁI
-        isHandlingBoss = false
-        farmEnabled = true
-        return
-    end
-
-    -- Nếu có boss, xử lý boss
-    local bossHRP = bossData:FindFirstChild("HumanoidRootPart")
-    if bossHRP then
-        character.HumanoidRootPart.CFrame = bossHRP.CFrame * CFrame.new(0, 3, -5)
-    end
-
-    while bossData and bossData:GetAttribute("HP") and bossData:GetAttribute("HP") > 0 and isHandlingBoss do
-        pcall(autoAttack, bossData.Name, bossData.Position)
-        pcall(punchAttack, bossData.Name)
-        task.wait(0.1)
-    end
-
-    -- Capture boss khi chết
-    if bossData and bossData:GetAttribute("HP") and bossData:GetAttribute("HP") <= 0 then
-        for _ = 1, 5 do
-            ariseEnemy(bossData.Name)
-            task.wait(0.3)
-        end
-    end
-
-    pcall(teleportToKindama)
-
-    -- ✅ Reset trạng thái để tiếp tục farm thường
-    print("✅ Boss xử lý xong hoặc không còn.")
-    isHandlingBoss = false
-    farmEnabled = true
-end
-
-local function startBossTimerChecker()
-    task.spawn(function()
-        while true do
-            local minutes = os.date("*t").min
-            if minutes >= 11 and minutes < 25 then
-                if not isHandlingBoss then
-                    print("⏳ Giai đoạn boss! Chuẩn bị...")
-                    handleWinterBoss()
-                end
-            end
-            task.wait(5)
-        end
-    end)
-end
 -- Initialization
 local function initialize()
     task.wait(3)
     local loadingScreen = createLoadingScreen()
     ContentProvider:PreloadAsync({workspace, Lighting})
     task.wait(0.5)
-    cleanUI()
     optimizeSystem()
     createStatsUI()
     loadingScreen:Destroy()
     createControlGUI()
     coroutine.wrap(antiAFK)()
     mainFarm()
-    startBossTimerChecker()
     print("✅ FPS Boost VIP Activated!")
 end
-mainFarm()
-startBossTimerChecker()
 
+initialize()
