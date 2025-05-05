@@ -1,8 +1,3 @@
-repeat wait() until game:IsLoaded() and game.Players.LocalPlayer 
-if not game:IsLoaded() then 
-    repeat task.wait() until game:IsLoaded() 
-end
-
 -- Services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -40,32 +35,6 @@ local function teleportToKindama()
         player.Character.HumanoidRootPart.CFrame = KINDAMA_CFRAME
         task.wait(TELEPORT_DELAY)
     end
-end
-
--- Loading screen
-local function createLoadingScreen()
-    local loadScreen = Instance.new("ScreenGui")
-    loadScreen.Name = "LoadingScreen"
-    loadScreen.IgnoreGuiInset = true
-    loadScreen.DisplayOrder = 9999
-
-    local loadFrame = Instance.new("Frame")
-    loadFrame.Size = UDim2.new(1, 0, 1, 0)
-    loadFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-    loadFrame.Parent = loadScreen
-
-    local loadText = Instance.new("TextLabel")
-    loadText.Size = UDim2.new(1, 0, 0, 50)
-    loadText.Position = UDim2.new(0, 0, 0.5, -25)
-    loadText.BackgroundTransparency = 1
-    loadText.Text = "Đang tối ưu hóa game, vui lòng chờ..."
-    loadText.TextColor3 = Color3.new(1, 1, 1)
-    loadText.Font = Enum.Font.SourceSansBold
-    loadText.TextSize = 24
-    loadText.Parent = loadFrame
-
-    loadScreen.Parent = playerGui
-    return loadScreen
 end
 
 -- Optimization functions
@@ -110,255 +79,84 @@ local function optimizeSystem()
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 end
 
--- GUI functions
-local function makeDraggable(gui, handle)
-    local dragging, dragInput, dragStart, startPos
+-- Boss Farm Handling (based on real-time)
+local function handleBossFarm()
+    local startBossTime = 11 * 60 -- Boss xuất hiện vào phút thứ 11
+    local endBossTime = 25 * 60 -- Boss biến mất vào phút thứ 25
 
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = gui.AbsolutePosition
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
+    while true do
+        local currentTime = os.time() -- Lấy thời gian thực hiện tại (số giây từ 01/01/1970)
+        local currentMinute = math.floor((currentTime % 86400) / 60) -- Lấy phút trong ngày (86400 là số giây trong 1 ngày)
+
+        -- Nếu thời gian hiện tại trong khoảng thời gian boss xuất hiện (từ phút 11 đến phút 25)
+        if currentMinute >= startBossTime and currentMinute <= endBossTime then
+            -- Dừng farm và teleport tới Winter
+            stopFarm()
+            teleportToWinter()
+            attackBoss()
+            teleportBackToKindama()
+            -- Sau khi đánh bại boss, farm tiếp tục
+            startFarm()
+        else
+            -- Boss chưa xuất hiện hoặc đã biến mất, tiếp tục farm
+            if not farmEnabled then
+                startFarm()
+            end
         end
-    end)
 
-    handle.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            gui.Position = UDim2.new(
-                0, startPos.X + delta.X,
-                0, startPos.Y + delta.Y
-            )
-        end
-    end)
-end
-
-local function createStatsUI()
-    local function formatNumber(num)
-        if not num or type(num) ~= "number" then return "0" end
-        
-        local suffixes = {"", "k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"}
-        local absNum = math.abs(num)
-        local suffixIndex = math.min(#suffixes, math.floor(math.log10(absNum)/3 + 1))
-        
-        local value = absNum / 10^(3*(suffixIndex-1))
-        local formatted = (value >= 100 and math.floor(value) or math.floor(value * 10)/10)
-        
-        return (num < 0 and "-" or "")..tostring(formatted):gsub("%.0$", "")..suffixes[suffixIndex]
-    end
-
-    -- Create UI
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "PlayerStatsUI"
-    screenGui.Parent = playerGui
-    screenGui.ResetOnSpawn = false
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 250, 0, 180)
-    frame.Position = UDim2.new(0.02, 0, 0.3, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    frame.BackgroundTransparency = 0.2
-    frame.BorderSizePixel = 0
-    frame.ClipsDescendants = true
-    frame.Parent = screenGui
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
-
-    -- ICON IDs
-    local COINS_ICON = "rbxassetid://"
-    local GEMS_ICON = "rbxassetid://"
-
-    -- Create label helper
-    local function createLabel(name, position, isTitle, isCredit)
-        local label = Instance.new("TextLabel")
-        label.Name = name
-        label.Size = isCredit and UDim2.new(1, 0, 0, 20) or UDim2.new(0.9, 0, 0, isTitle and 30 or 25)
-        label.Position = position
-        label.TextColor3 = isCredit and Color3.fromRGB(150, 150, 150) or 
-                          (isTitle and Color3.fromRGB(255, 215, 100) or Color3.fromRGB(220, 220, 255))
-        label.BackgroundTransparency = 1
-        label.Font = isCredit and Enum.Font.Gotham or 
-                    (isTitle and Enum.Font.GothamBlack or Enum.Font.GothamSemibold)
-        label.TextSize = isCredit and 12 or (isTitle and 18 or 16)
-        label.TextXAlignment = isCredit and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
-        label.Parent = frame
-        return label
-    end
-
-    -- Create icon helper
-    local function createIcon(name, position, image)
-        local icon = Instance.new("ImageLabel")
-        icon.Name = name
-        icon.Size = UDim2.new(0, 25, 0, 25)
-        icon.Position = position
-        icon.BackgroundTransparency = 1
-        icon.Image = image
-        icon.Parent = frame
-        return icon
-    end
-
-    -- Main UI elements
-    local titleLabel = createLabel("Title", UDim2.new(0.05, 0, 0.05, 0), true)
-    titleLabel.Text = player.Name
-    titleLabel.Size = UDim2.new(0.9, 0, 0, 30)
-    makeDraggable(screenGui, titleLabel)
-
-    createIcon("CoinsIcon", UDim2.new(0.05, 0, 0.35, 0), COINS_ICON)
-    local coinsLabel = createLabel("CoinsLabel", UDim2.new(0.15, 0, 0.35, 0))
-    coinsLabel.Text = "Coins: 0"
-
-    createIcon("GemsIcon", UDim2.new(0.05, 0, 0.6, 0), GEMS_ICON)
-    local gemsLabel = createLabel("GemsLabel", UDim2.new(0.15, 0, 0.6, 0))
-    gemsLabel.Text = "Gems: 0"
-
-    local creditLabel = createLabel("Credit", UDim2.new(0, 0, 0.85, 0), false, true)
-    creditLabel.Text = "Made by @_lnch"
-
-    -- UI update function
-    local function updateUI()
-        local leaderstats = player:FindFirstChild("leaderstats")
-        if leaderstats then
-            coinsLabel.Text = "Coins: "..formatNumber(leaderstats:GetAttribute("Coins") or 0)
-            gemsLabel.Text = "Gems: "..formatNumber(leaderstats:GetAttribute("Gems") or 0)
-        end
-    end
-
-    -- Update listeners
-    local heartbeatConnection
-    heartbeatConnection = RunService.Heartbeat:Connect(updateUI)
-    
-    player.CharacterAdded:Connect(function()
+        -- Đợi 1 giây rồi kiểm tra lại
         task.wait(1)
-        updateUI()
-    end)
-
-    updateUI()
-    
-    return {
-        Destroy = function()
-            heartbeatConnection:Disconnect()
-            screenGui:Destroy()
-        end
-    }
-end
-
-local function createControlGUI()
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "AutoFarmGUI"
-    ScreenGui.Parent = playerGui
-    ScreenGui.ResetOnSpawn = false
-
-    -- Giảm kích thước main frame
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 120, 0, 100)  -- Giảm từ 160x160 xuống 120x100
-    mainFrame.Position = UDim2.new(0.02, 0, 0.02, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    mainFrame.BackgroundTransparency = 0.2
-    mainFrame.BorderSizePixel = 0
-    mainFrame.ClipsDescendants = true
-    mainFrame.Parent = ScreenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)  -- Giảm góc bo từ 8 xuống 6
-    corner.Parent = mainFrame
-
-    local titleBar = Instance.new("TextLabel")
-    titleBar.Size = UDim2.new(1, 0, 0, 24)  -- Giảm chiều cao từ 30 xuống 24
-    titleBar.Text = "Auto Farm"
-    titleBar.TextColor3 = Color3.fromRGB(255, 215, 100)
-    titleBar.BackgroundTransparency = 1
-    titleBar.Font = Enum.Font.GothamMedium  -- Đổi font cho gọn
-    titleBar.TextSize = 14  -- Giảm từ 16 xuống 14
-    titleBar.Parent = mainFrame
-    makeDraggable(ScreenGui, titleBar)
-
-    local renderToggleButton = Instance.new("TextButton")
-    renderToggleButton.Size = UDim2.new(0.85, 0, 0, 28)  -- Giảm kích thước
-    renderToggleButton.Position = UDim2.new(0.075, 0, 0.3, 0)  -- Điều chỉnh vị trí
-    renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
-    renderToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    renderToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    renderToggleButton.Font = Enum.Font.Gotham  -- Đổi font
-    renderToggleButton.TextSize = 12  -- Giảm kích thước chữ
-    renderToggleButton.Parent = mainFrame
-    
-    local cornerBtn = Instance.new("UICorner")
-    cornerBtn.CornerRadius = UDim.new(0, 5)  -- Giảm góc bo
-    cornerBtn.Parent = renderToggleButton
-
-    -- Nút farm nhỏ hơn
-    local farmToggleButton = Instance.new("TextButton")
-    farmToggleButton.Size = UDim2.new(0.85, 0, 0, 28)  -- Đồng bộ kích thước
-    farmToggleButton.Position = UDim2.new(0.075, 0, 0.65, 0)  -- Căn chỉnh vị trí
-    farmToggleButton.Text = farmEnabled and "Tắt Farm" or "Bật Farm"  -- Rút gọn text
-    farmToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    farmToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    farmToggleButton.Font = Enum.Font.Gotham
-    farmToggleButton.TextSize = 12
-    farmToggleButton.Parent = mainFrame
-    
-    local cornerBtn2 = Instance.new("UICorner")
-    cornerBtn2.CornerRadius = UDim.new(0, 5)
-    cornerBtn2.Parent = farmToggleButton
-
-    -- Thêm hiệu ứng hover
-    local function buttonHoverEffect(button)
-        button.MouseEnter:Connect(function()
-            button.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        end)
-        
-        button.MouseLeave:Connect(function()
-            button.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-        end)
     end
-
-    buttonHoverEffect(renderToggleButton)
-    buttonHoverEffect(farmToggleButton)
-
-    -- Xử lý sự kiện click
-    renderToggleButton.MouseButton1Click:Connect(function()
-        isRenderOff = not isRenderOff
-        RunService:Set3dRenderingEnabled(not isRenderOff)
-        renderToggleButton.Text = isRenderOff and "Bật Render" or "Tắt Render"
-    end)
-
-    farmToggleButton.MouseButton1Click:Connect(function()
-        farmEnabled = not farmEnabled
-        farmToggleButton.Text = farmEnabled and "Tắt Farm" or "Bật Farm"
-    end)
-
-    RunService:Set3dRenderingEnabled(not isRenderOff)
-    
-    return ScreenGui
 end
 
-local function mount()
-    dataRemoteEvent:FireServer({{
-        Action = "Mount",
-        Event = "MountAction",
-        Name = "PurpleElder003a6e7"
-    }, "\11"})
-end 
+-- Stop and Start Farm
+local function stopFarm()
+    farmEnabled = false -- Tắt farm
+end
 
-local function disMount()
-    dataRemoteEvent:FireServer({{
-        Action = "Dismount",
-        Event = "MountAction"
-    }, "\11"})
+local function startFarm()
+    farmEnabled = true -- Bật farm lại
+    mainFarm() -- Gọi lại quá trình farm quái
+end
+
+-- Teleport Functions
+local function teleportToWinter()
+    local winterCFrame = CFrame.new(-5000, 0, 5000) -- Ví dụ tọa độ đảo Winter
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = winterCFrame
+        task.wait(TELEPORT_DELAY)
+    end
+end
+
+local function teleportBackToKindama()
+    -- Chỉnh lại tọa độ về đảo Kindama
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = KINDAMA_CFRAME
+        task.wait(TELEPORT_DELAY)
+    end
+end
+
+-- Boss Handling Functions
+local function attackBoss()
+    -- Tìm quái boss (với attribute ID là WBoss)
+    local boss = findAliveEnemy("WBoss")
+
+    if boss then
+        -- Đánh boss cho đến khi HP của nó bằng 0
+        while boss:GetAttribute("HP") > 0 do
+            punchAttack(boss.Name)
+            task.wait(0.1)
+        end
+
+        -- Sau khi HP = 0, tiêu diệt boss
+        destroyEnemy(boss)
+        task.wait(0.5)
+
+        -- Sau khi tiêu diệt boss, arise boss để quái mới xuất hiện
+        ariseEnemy(boss)
+    else
+        print("Boss không có mặt!")
+    end
 end
 
 local function findAliveEnemy(targetID)
@@ -394,42 +192,6 @@ local function punchAttack(enemyData)
     dataRemoteEvent:FireServer(unpack(args))
 end
 
-local function autoAttack(name,pos)
-    task.wait(0.6)
-    local player = Players.LocalPlayer
-    local playerId = tostring(player.UserId)
-    
-    -- Lấy folder pet của người chơi
-    local playerFolder = workspace.__Main.__Pets:FindFirstChild(playerId)
-    if not playerFolder then
-        warn("📦 Không tìm thấy folder pet cho ID:", playerId)
-        return
-    end
-
-    -- Tạo vector từ vị trí kẻ địch
-    local defaultVector = pos
-	
-    -- Tạo bảng PetPos
-    local PetPos = {}
-    for _, pet in ipairs(playerFolder:GetChildren()) do
-        if pet:IsA("Folder") then
-            PetPos[pet.Name] = defaultVector
-        end
-    end
-    
-    local args = {{
-        {
-            PetPos = PetPos,
-            AttackType = "All",
-            Event = "Attack",
-            Enemy = name
-        },
-        "\006"
-    }}
-
-    dataRemoteEvent:FireServer(unpack(args))
-end
-
 local function destroyEnemy(enemyData)
     local args = {
         {
@@ -456,16 +218,8 @@ local function ariseEnemy(enemyData)
     dataRemoteEvent:FireServer(unpack(args))
 end
 
-local function turnOnAutoClick()
-    player:SetAttribute("AutoClick", true)
-end
-
 local function mainFarm()
     task.spawn(function()
-        mount()
-        task.wait(0.5)
-        disMount()
-
         while true do
             -- Nếu tắt farm thì dừng
             if not farmEnabled then
@@ -483,7 +237,8 @@ local function mainFarm()
                         player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
                     end
 
-                    autoAttack(enemyData.Name, enemyData.Position)
+                    -- Tấn công quái
+                    punchAttack(enemyData.Name)
 
                     -- Đợi đánh quái
                     while enemyData and enemyData:GetAttribute("HP") > 0 and farmEnabled do
@@ -512,15 +267,10 @@ end
 -- Initialization
 local function initialize()
     task.wait(3)
-    local loadingScreen = createLoadingScreen()
-    ContentProvider:PreloadAsync({workspace, Lighting})
-    task.wait(0.5)
     optimizeSystem()
-    createStatsUI()
-    loadingScreen:Destroy()
-    createControlGUI()
-    coroutine.wrap(antiAFK)()
-    mainFarm()
+    task.spawn(handleBossFarm) -- Chạy theo dõi boss
+    task.spawn(mainFarm) -- Chạy quá trình farm quái
+    coroutine.wrap(antiAFK)() -- Đảm bảo không bị AFK
     print("✅ FPS Boost VIP Activated!")
 end
 
