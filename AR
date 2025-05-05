@@ -596,7 +596,20 @@ local function handleWinterBoss()
     farmEnabled = true
 end
 
-
+local function startBossTimerChecker()
+    task.spawn(function()
+        while true do
+            local minutes = os.date("*t").min
+            if minutes >= 11 and minutes < 25 then
+                if not isHandlingBoss then
+                    print("⏳ Giai đoạn boss! Chuẩn bị...")
+                    handleWinterBoss()
+                end
+            end
+            task.wait(5)
+        end
+    end)
+end
 -- Initialization
 local function initialize()
     task.wait(3)
