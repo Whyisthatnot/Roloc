@@ -531,7 +531,7 @@ local function mainFarm()
 end
 
 local function handleWinterBoss()
-    if isHandlingBoss then return end -- tránh xử lý boss trùng lần
+    if isHandlingBoss then return end -- Đã xử lý thì thôi
 
     isHandlingBoss = true
     farmEnabled = false
@@ -545,7 +545,7 @@ local function handleWinterBoss()
         return
     end
 
-    -- Teleport tới boss
+    -- Teleport tới vị trí boss
     pcall(function()
         character.HumanoidRootPart.CFrame = WINTER_CFRAME
         task.wait(TELEPORT_DELAY)
@@ -556,15 +556,19 @@ local function handleWinterBoss()
     local success, err = pcall(function()
         bossData = findAliveEnemy("WBoss")
     end)
+
     if not success or not bossData then
-        warn("❌ Boss không tìm thấy:", err)
+        -- 🛑 Boss không còn (do bị người khác kill mất)
+        warn("❌ Boss không còn, tiếp tục farm thường.")
         pcall(teleportToKindama)
+
+        -- RESET TRẠNG THÁI
         isHandlingBoss = false
         farmEnabled = true
         return
     end
 
-    -- Đánh boss
+    -- Nếu có boss, xử lý boss
     local bossHRP = bossData:FindFirstChild("HumanoidRootPart")
     if bossHRP then
         character.HumanoidRootPart.CFrame = bossHRP.CFrame * CFrame.new(0, 3, -5)
@@ -586,26 +590,12 @@ local function handleWinterBoss()
 
     pcall(teleportToKindama)
 
-    -- Reset trạng thái
-    print("✅ Boss xử lý xong!")
+    -- ✅ Reset trạng thái để tiếp tục farm thường
+    print("✅ Boss xử lý xong hoặc không còn.")
     isHandlingBoss = false
     farmEnabled = true
 end
 
-local function startBossTimerChecker()
-    task.spawn(function()
-        while true do
-            local minutes = os.date("*t").min
-            if minutes >= 11 and minutes < 25 then
-                if not isHandlingBoss then
-                    print("⏳ Giai đoạn boss! Chuẩn bị...")
-                    handleWinterBoss()
-                end
-            end
-            task.wait(5)
-        end
-    end)
-end
 
 -- Initialization
 local function initialize()
