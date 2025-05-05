@@ -1,4 +1,6 @@
-repeat wait() until game:IsLoaded() and game.Players.LocalPlayer
+repeat wait() until game:IsLoaded() and game.Players.LocalPlayer 
+if not game:IsLoaded() then 
+    repeat task.wait() until game:IsLoaded() 
 end
 
 -- Services
@@ -40,32 +42,6 @@ local function teleportToKindama()
         task.wait(TELEPORT_DELAY)
     end
 end
-
-
-
-
-
-
-local function findAliveEnemy(targetID)
-    local enemiesFolder = workspace.__Main.__Enemies.Server
-    
-    local function search(folder)
-        for _, enemy in ipairs(folder:GetChildren()) do
-            if enemy:GetAttribute("Id") == targetID and enemy:GetAttribute("HP") > 0 then
-                return enemy 
-            elseif enemy:IsA("Folder") then
-                local found = search(enemy)
-                if found then
-                    return found
-                end
-            end
-        end
-        return nil
-    end
-    
-    return search(enemiesFolder)
-end
-
 -- Loading screen
 local function createLoadingScreen()
     local loadScreen = Instance.new("ScreenGui")
@@ -387,8 +363,25 @@ local function disMount()
     }, "\11"})
 end
 
-
-
+local function findAliveEnemy(targetID)
+    local enemiesFolder = workspace.__Main.__Enemies.Server
+    
+    local function search(folder)
+        for _, enemy in ipairs(folder:GetChildren()) do
+            if enemy:GetAttribute("Id") == targetID and enemy:GetAttribute("HP") > 0 then
+                return enemy 
+            elseif enemy:IsA("Folder") then
+                local found = search(enemy)
+                if found then
+                    return found
+                end
+            end
+        end
+        return nil
+    end
+    
+    return search(enemiesFolder)
+end
 
 local function punchAttack(enemyData)
     local args = {
@@ -562,34 +555,30 @@ local function mainFarm()
             end
 
             for _, enemyID in ipairs(enemyIDList) do
-		    local enemyData = findAliveEnemy(enemyID)
-		    while enemyData and farmEnabled and not isHandlingBoss do
-		        if isHandlingBoss then break end -- ⬅️ Check ngay lập tức
-		
-		        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-		            player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
-		        end
-		
-		        punchAttack(enemyData.Name)
-		        autoAttack(enemyData.Name, enemyData.Position)
-		
-		        while enemyData:GetAttribute("HP") > 0 and farmEnabled and not isHandlingBoss do
-		            if isHandlingBoss then break end -- ⬅️ Check ngay trong attack loop
-		            task.wait(0.1)
-		        end
-		
-		        if farmEnabled and not isHandlingBoss then
-		            for _ = 1, 5 do
-		                if isHandlingBoss then break end -- ⬅️ Check khi destroy quái
-		                destroyEnemy(enemyData.Name)
-		                task.wait(0.3)
-		            end
-		        end
-		
-		        task.wait(TELEPORT_DELAY)
-		        enemyData = findAliveEnemy(enemyID)
-		    end
-		end
+                local enemyData = findAliveEnemy(enemyID)
+                while enemyData and farmEnabled and not isHandlingBoss do
+                    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                        player.Character.HumanoidRootPart.CFrame = CFrame.new(enemyData.Position) * CFrame.new(0, 0, -2)
+                    end
+
+                    punchAttack(enemyData.Name)
+                    autoAttack(enemyData.Name, enemyData.Position)
+
+                    while enemyData:GetAttribute("HP") > 0 and farmEnabled and not isHandlingBoss do
+                        task.wait(0.1)
+                    end
+
+                    if farmEnabled and not isHandlingBoss then
+                        for _ = 1, 5 do
+                            destroyEnemy(enemyData.Name)
+                            task.wait(0.3)
+                        end
+                    end
+
+                    task.wait(TELEPORT_DELAY)
+                    enemyData = findAliveEnemy(enemyID)
+                end
+            end
         end
     end)
 end
