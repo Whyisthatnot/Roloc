@@ -104,9 +104,7 @@ local function antiAFK()
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.L, false, false)
     end
 end
-
-antiAFK()
-
+task.spawn(antiAFK)
 -- Cập nhật chức năng kiểm tra số lượng người chơi
 local function checkPlayerCountAndKick()
     -- Kiểm tra số lượng người chơi trên server
