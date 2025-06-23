@@ -87,7 +87,7 @@ pcall(function()
     end
 end)
 
-
+local workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local PathfindingService = game:GetService("PathfindingService")
@@ -95,29 +95,11 @@ local player = Players.LocalPlayer
 local animalsData = require(ReplicatedStorage:WaitForChild("Datas"):WaitForChild("Animals"))
 local HttpService = game:GetService("HttpService")
 
--- Cập nhật chức năng kiểm tra số lượng người chơi
-local function checkPlayerCountAndKick()
-    -- Kiểm tra số lượng người chơi trên server
-    local playerCount = #Players:GetPlayers()
-    
-    if playerCount >= 2 then
-        -- Nếu có từ 2 người chơi trở lên, kick người chơi hiện tại ra khỏi server
-        player:Kick("Đã có ít nhất 2 người chơi trên server, bạn đã bị đá ra.")
-    end
-end
-
--- Kiểm tra và kick khi kết nối game
-task.spawn(function()
-    while true do
-        checkPlayerCountAndKick()  -- Kiểm tra số lượng người chơi và kick nếu cần
-        task.wait(5)  -- Kiểm tra mỗi 5 giây
-    end
-end)
-
 -- Settings
 local buyingEnabled = false
 local sellingEnable = false
 local farmingEnabled = true
+
 
 local rarityOrder = {
 	Common = 1,
@@ -175,7 +157,6 @@ local function getPlayerPlot()
 	end
 	return playerPlot
 end
-
 
 local function UI()
 	-- Ẩn Topbar
@@ -291,16 +272,46 @@ local function UI()
 		end
 	end)
 end
-UI()
+UI() -- Gọi hàm tạo UI
+
+-- Cập nhật chức năng kiểm tra số lượng người chơi
+
+local function checkPlayerCountAndKick()
+
+    -- Kiểm tra số lượng người chơi trên server
+
+    local playerCount = #Players:GetPlayers()
+
+    
+
+    if playerCount >= 2 then
+
+        -- Nếu có từ 2 người chơi trở lên, kick người chơi hiện tại ra khỏi server
+
+        player:Kick("Đã có ít nhất 2 người chơi trên server, bạn đã bị đá ra.")
+
+    end
+
+end
+
+task.spawn(function()
+	while true do
+		checkPlayerCountAndKick()
+		task.wait(0.5)
+	end
+end)
+
+
+
 local function spinCam()
 	local RunService = game:GetService("RunService")
 	local Players = game:GetService("Players")
 	local player = Players.LocalPlayer
 	local camera = workspace.CurrentCamera
 
-	local radius = 11 -- bán kính quay quanh nhân vật
+	local radius = 10 -- bán kính quay quanh nhân vật
 	local height = 5 -- độ cao của camera
-	local speed = 0.25 -- tốc độ quay
+	local speed = 0.5 -- tốc độ quay
 
 	local angle = 0
 
@@ -368,7 +379,7 @@ local function walkToSmooth(targetPart)
 		if stuckTimer >= maxStuckTime then
 			warn("🧱 Stuck during walk (", math.floor(distance), " studs left). Resetting...")
 			resetCharacter()
-			wait(5)
+			wait(0.5)
 			return false
 		end
 
@@ -494,46 +505,25 @@ local function tryBuyPet(pet)
 			sendWebhook(pet.Name, data.Rarity, mutationText)
 		end
 		resetCharacter()
-		wait(5)
+		player.CharacterAdded:Wait()
+		wait(0.5)
 		return true
 	end
 	return false
 end
 
-
-local function removeLowestRarityPet()
+local function removeLowestPricePet()
 	farmingEnabled = false
 	sellingEnable = true
 	buyingEnabled = false
-	print("🔁 [Farm] Starting removeLowestRarityPet...")
+	print("🔁 [Farm] Starting removeLowestPricePet...")
+
 	local plot = getPlayerPlot()
 	if not plot then return end
 	local podiums = plot:FindFirstChild("AnimalPodiums")
 	if not podiums then return end
 
-	local cash = player.leaderstats.Cash.Value
-
-	-- ❗ Giới hạn xoá theo Cash
-	local allowedMaxRarity = nil
-	if cash >= 50000000 then
-		allowedMaxRarity = rarityOrder["Mythic"]
-	elseif cash >= 7000000 then
-		allowedMaxRarity = rarityOrder["Legendary"]
-	elseif cash >= 1000000 then
-		allowedMaxRarity = rarityOrder["Epic"]
-	elseif cash >= 100000 then
-		allowedMaxRarity = rarityOrder["Rare"]
-	elseif cash >= 3000 then
-		allowedMaxRarity = rarityOrder["Common"]
-	end
-
-	if not allowedMaxRarity then
-		print("💰 Cash too low. Skip removing.")
-		return false
-	end
-
-	local lowestRarity = math.huge
-	local lowestGeneration = math.huge
+	local minPrice = math.huge
 	local targetSpawn = nil
 	local targetPetName = "?"
 
@@ -545,31 +535,13 @@ local function removeLowestRarityPet()
 
 			if overhead then
 				local nameLabel = overhead:FindFirstChild("DisplayName")
-				local genLabel = overhead:FindFirstChild("Generation")
-
-				if nameLabel and nameLabel:IsA("TextLabel") and genLabel and genLabel:IsA("TextLabel") then
+				if nameLabel and nameLabel:IsA("TextLabel") then
 					local petName = nameLabel.Text
 					local data = animalsData[petName]
-					local rarity = data and data.Rarity
-					local rarityValue = rarity and rarityOrder[rarity]
-					local generationValue = tonumber(string.match(genLabel.Text, "%d+")) or 0
-
-					if rarityValue then
-						if rarity == "Brainrot God" or rarity == "Secret" then
-							print("🔒 Skip VIP pet:", petName)
-						elseif rarityValue <= allowedMaxRarity then
-							if
-								rarityValue < lowestRarity or
-								(rarityValue == lowestRarity and generationValue < lowestGeneration)
-							then
-								lowestRarity = rarityValue
-								lowestGeneration = generationValue
-								targetSpawn = spawn
-								targetPetName = petName
-							end
-						else
-							print("⛔ Too rare to remove:", petName, "(Rarity:", rarity, ")")
-						end
+					if data and data.Price < minPrice then
+						minPrice = data.Price
+						targetSpawn = spawn
+						targetPetName = petName
 					end
 				end
 			end
@@ -577,7 +549,7 @@ local function removeLowestRarityPet()
 	end
 
 	if targetSpawn then
-		print("🗑️ Removing pet:", targetPetName, "| Rarity =", lowestRarity, "| Generation =", lowestGeneration)
+		print("🗑️ Removing lowest price pet:", targetPetName, "| Price =", minPrice)
 		if not walkToSmooth(targetSpawn) then return end
 
 		local promptAttachment = targetSpawn:FindFirstChild("PromptAttachment")
@@ -590,11 +562,12 @@ local function removeLowestRarityPet()
 			return true
 		end
 	else
-		print("✅ No pet meets deletion criteria at current cash =", cash)
+		print("✅ No pet found to remove.")
 	end
 
 	return false
 end
+
 
 
 local function claimCoinsAtAnimalPodiums()
@@ -627,7 +600,8 @@ local function claimCoinsAtAnimalPodiums()
 			if not reached then
 				print("❌ [Farm] Stuck while walking to podium slot", i, ". Skipping...")
 				resetCharacter()
-				wait(5)
+				player.CharacterAdded:Wait()
+				wait(0.5)
 			end
 			wait(0.2)
 
@@ -651,38 +625,42 @@ task.spawn(function()
 		task.wait(0.1) -- Update mỗi 0.1 giây
 	end
 end)
-
 task.spawn(function()
-	while true do
+    while true do
+        -- Kiểm tra nếu có empty slots và tiến hành mua pet
+        if currentEmptySlots > 0 then
+            print("🟢 [AUTO] Empty slot found. Attempting to buy pet...")
+            local bestPet = findBestPet()
 
-		if currentEmptySlots > 0 then
-			print("🟢 [AUTO] Empty slot found. Attempting to buy pet...")
-			local bestPet = findBestPet()
+            if bestPet then
+                -- Dừng farming nếu tìm thấy pet để mua
+                if farmingEnabled then
+                    print("🛑 [AUTO] Stop farming — pet found to buy")
+                    farmingEnabled = false
+                end
+                tryBuyPet(bestPet)
+            else
+                -- Nếu không tìm thấy pet, chuyển qua farming
+                print("🔍 [AUTO] No pet found to buy. Switching to farming.")
+                farmingEnabled = true
+                claimCoinsAtAnimalPodiums()
+            end
 
-			if bestPet then
-				if farmingEnabled then
-					print("🛑 [AUTO] Stop farming — pet found to buy")
-					farmingEnabled = false
-				end
-				tryBuyPet(bestPet)
-			else
-				print("🔍 [AUTO] No pet found to buy. Switching to farming.")
-				farmingEnabled = true
-				claimCoinsAtAnimalPodiums()
-			end
+        -- Nếu không có empty slots, kiểm tra xem có thể xóa pet không
+        else
+            print("🟡 [AUTO] No empty slots. Trying to remove weakest pet...")
+            local removed = removeLowestPricePet()
+            if removed then
+                print("🗑️ [AUTO] Pet removed successfully.")
+            else
+                -- Nếu không thể xóa pet, chuyển qua farming
+                print("🔒 [AUTO] No pet could be removed. Farming instead.")
+                farmingEnabled = true
+                claimCoinsAtAnimalPodiums()
+            end
+        end
 
-		else
-			print("🟡 [AUTO] No empty slots. Trying to remove weakest pet...")
-			local removed = removeLowestRarityPet()
-			if removed then
-				print("🗑️ [AUTO] Pet removed successfully.")
-			else
-				print("🔒 [AUTO] No pet could be removed. Farming instead.")
-				farmingEnabled = true
-				claimCoinsAtAnimalPodiums()
-			end
-		end
-
-		wait(0.5)
-	end
+        -- Đợi trước khi tiếp tục vòng lặp
+        wait(0.5)
+    end
 end)
