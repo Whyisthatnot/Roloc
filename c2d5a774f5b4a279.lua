@@ -98,6 +98,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local coinsShopService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net"):WaitForChild("RF/CoinsShopService/RequestBuy")
 local itemName = "Speed Coil"
 local itemPrice = 750
+local cashValue = player:WaitForChild("leaderstats"):WaitForChild("Cash")
 
 local function equipItemWhenAvailable()
     local character = player.Character or player.CharacterAdded:Wait()
