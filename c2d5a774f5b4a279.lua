@@ -94,7 +94,15 @@ local PathfindingService = game:GetService("PathfindingService")
 local player = Players.LocalPlayer
 local animalsData = require(ReplicatedStorage:WaitForChild("Datas"):WaitForChild("Animals"))
 local HttpService = game:GetService("HttpService")
-
+local function antiAFK()
+    while true do
+        wait(60)
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.L, false, game)
+        wait(0.1)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.L, false, game)
+    end
+end
+antiAFK()
 -- Cập nhật chức năng kiểm tra số lượng người chơi
 local function checkPlayerCountAndKick()
     -- Kiểm tra số lượng người chơi trên server
