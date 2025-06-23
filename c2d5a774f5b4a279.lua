@@ -143,17 +143,39 @@ local function resetCharacter()
 		end
 	end
 end
+local playerPlot = nil
 
-local function getPlayerPlot()
-	for _, plot in ipairs(workspace.Plots:GetChildren()) do
-		local success, txt = pcall(function()
-			return plot.PlotSign.SurfaceGui.Frame.TextLabel.Text
-		end)
-		if success and txt == player.Name .. "'s Base" then
-			return plot
+local function findClosestPlot()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local hrp = character:WaitForChild("HumanoidRootPart")
+	local closestPlot = nil
+	local shortestDistance = math.huge
+
+	for _, plot in ipairs(workspace:WaitForChild("Plots"):GetChildren()) do
+		if plot:FindFirstChild("PlotSign") then
+			local dist = (hrp.Position - plot.PlotSign.Position).Magnitude
+			if dist < shortestDistance then
+				shortestDistance = dist
+				closestPlot = plot
+			end
 		end
 	end
+
+	return closestPlot
 end
+
+local function getPlayerPlot()
+	if not playerPlot or not playerPlot.Parent then
+		playerPlot = findClosestPlot()
+		if playerPlot then
+			print("📌 Player plot identified as:", playerPlot.Name)
+		else
+			warn("❌ Could not determine player plot.")
+		end
+	end
+	return playerPlot
+end
+
 
 local function UI()
 	-- Ẩn Topbar
