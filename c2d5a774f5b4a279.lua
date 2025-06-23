@@ -95,13 +95,43 @@ local player = Players.LocalPlayer
 local animalsData = require(ReplicatedStorage:WaitForChild("Datas"):WaitForChild("Animals"))
 local HttpService = game:GetService("HttpService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local coinsShopService = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net"):WaitForChild("RF/CoinsShopService/RequestBuy")
+local itemName = "Speed Coil"
+local itemPrice = 750
 
+local function equipItemWhenAvailable()
+    local character = player.Character or player.CharacterAdded:Wait()
+    local backpack = player:WaitForChild("Backpack")
+    task.spawn(function()
+	    while true do
+	        local tool = backpack:FindFirstChild(itemName)
+	        if tool then
+	            tool.Parent = character
+	            break
+	        end
+	        wait(0.5)
+	    end
+    end)
+end
+
+task.spawn(function()
+    while true do
+        if cashValue.Value >= itemPrice then
+            local success = coinsShopService:InvokeServer(itemName)
+            if success then
+                equipItemWhenAvailable()
+            end
+            break -- Dừng vòng lặp sau khi mua thành công
+        end
+        wait(10) -- Kiểm tra lại mỗi 10 giây
+    end
+end)
 local function antiAFK()
     while true do
         wait(60)
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.L, false, false)
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.L, false, game)
         wait(0.1)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.L, false, false)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.L, false, game)
     end
 end
 task.spawn(antiAFK)
