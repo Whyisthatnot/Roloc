@@ -112,7 +112,7 @@ local function checkPlayerCountAndKick()
     
     if playerCount >= 2 then
         -- Nếu có từ 2 người chơi trở lên, kick người chơi hiện tại ra khỏi server
-        player:Kick("Đã có ít nhất 2 người chơi trên server, bạn đã bị đá ra.")
+        player:Kick("Another person detected in server!!")
     end
 end
 
