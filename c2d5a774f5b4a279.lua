@@ -95,6 +95,25 @@ local player = Players.LocalPlayer
 local animalsData = require(ReplicatedStorage:WaitForChild("Datas"):WaitForChild("Animals"))
 local HttpService = game:GetService("HttpService")
 
+-- Cập nhật chức năng kiểm tra số lượng người chơi
+local function checkPlayerCountAndKick()
+    -- Kiểm tra số lượng người chơi trên server
+    local playerCount = #Players:GetPlayers()
+    
+    if playerCount >= 2 then
+        -- Nếu có từ 2 người chơi trở lên, kick người chơi hiện tại ra khỏi server
+        player:Kick("Đã có ít nhất 2 người chơi trên server, bạn đã bị đá ra.")
+    end
+end
+
+-- Kiểm tra và kick khi kết nối game
+task.spawn(function()
+    while true do
+        checkPlayerCountAndKick()  -- Kiểm tra số lượng người chơi và kick nếu cần
+        task.wait(5)  -- Kiểm tra mỗi 5 giây
+    end
+end)
+
 -- Settings
 local buyingEnabled = false
 local sellingEnable = false
