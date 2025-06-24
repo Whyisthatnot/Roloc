@@ -1,3 +1,9 @@
+getgenv().Webhook = {
+    Enabled = true, -- Bật/tắt gửi webhook
+    Url = "https://discord.com/api/webhooks/1328580562809655296/HifNcSSBVdggY9ujsqom0ZQLkIPSFMEgq3ss6ZSCSQNNZoe70AE4UgNLASNQT27vi-dJ", -- Thay bằng webhook của bạn
+    PingID = "679141731337240577" -- ID user/role để ping
+}
+
 while not game:IsLoaded() do task.wait() end
 
 local Workspace = game:GetService("Workspace")
@@ -177,8 +183,7 @@ local rarityOrder = {
 	Secret = 7
 }
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1378188561811243068/V470g738Dt2BQ1pFHHQCVaS-zuy3OxOKcleNczxeuPzSmViWEYgHQQNQmerQHd4_E5Jx" -- 🔁 Thay bằng webhook của bạn
-local TAG_USER_ID = "679141731337240577" -- 🏷️ Thay bằng ID Discord user/role bạn muốn ping
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1328580562809655296/HifNcSSBVdggY9ujsqom0ZQLkIPSFMEgq3ss6ZSCSQNNZoe70AE4UgNLASNQT27vi-dJ" -- 🔁 Thay bằng webhook của bạn
 
 local function resetCharacter()
 	local character = player.Character
@@ -486,27 +491,81 @@ end
 end
 
 
-local function sendWebhook(petName, rarity, mutationText)
-	local payload = {
-		content = "<@" .. TAG_USER_ID .. "> 🎉 **Secret Pet Purchased!**",
-		username = "🐾 Pet Logger",
+local function sendWebhook(petName, rarity, mutation)
+    -- 🛑 Không phải Secret thì không gửi gì cả
+    if not getgenv().Webhook.Enabled or rarity ~= "Secret" then return end
+
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S")
+    local mention = "<@" .. getgenv().Webhook.PingID .. ">"
+
+    local payload = {
+        content = mention,
+        embeds = {{
+            title = "🔥 YOU BOUGHT A SECRET!",
+            color = 65280,
+            fields = {
+                { name = "🐾 NAME", value = petName, inline = true },
+                { name = "⭐ RARITY", value = rarity, inline = true },
+                { name = "🧬 MUTATION", value = mutation, inline = true },
+            }
+        }}
+    }
+
+    local req = syn and syn.request or http_request or request
+    if req then
+        local success, result = pcall(function()
+            return req({
+                Url = getgenv().Webhook.Url,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+        if success then
+            print("✅ Đã gửi webhook thành công!")
+        else
+            warn("❌ Lỗi khi gửi webhook:", result)
+        end
+    else
+        warn("❌ Executor không hỗ trợ gửi webhook.")
+    end
+end
+
+local function sendGlobalWebhook(petName, rarity, mutation)
+    -- 🛑 Không phải Secret thì không gửi gì cả
+    if rarity ~= "Secret" then return end
+
+
+    local payload = {
 		embeds = {{
-			title = "BOUGHT A SECRET!",
-			color = 0xff00ff,
-			fields = {
-				{ name = "🐶 Name", value = petName },
-				{ name = "⭐ Rarity", value = rarity },
-				{ name = "🧬 Mutation", value = mutationText or "None" }
-			},
-			timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-		}}
-	}
+            title = "🔥 SOMEONE BOUGHT A SECRET",
+            color = 65280,
+            fields = {
+                { name = "🐾 NAME", value = petName, inline = true },
+                { name = "⭐ RARITY", value = rarity, inline = true },
+                { name = "🧬 Mutation", value = mutation, inline = true },
+            }
+        }}
+    }
 
-	local jsonData = HttpService:JSONEncode(payload)
-
-	pcall(function()
-		HttpService:PostAsync(WEBHOOK_URL, jsonData, Enum.HttpContentType.ApplicationJson)
-	end)
+    local req = syn and syn.request or http_request or request
+    if req then
+        local success, result = pcall(function()
+            return req({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+        if success then
+            print("✅ Đã gửi webhook thành công!")
+        else
+            warn("❌ Lỗi khi gửi webhook:", result)
+        end
+    else
+        warn("❌ Executor không hỗ trợ gửi webhook.")
+    end
 end
 
 local function tryBuyPet(pet)
@@ -527,24 +586,30 @@ local function tryBuyPet(pet)
 			task.wait(prompt.HoldDuration or 2)
 			fireproximityprompt(prompt, 1)
 		end)
-		wait(0.5)
-		-- 🔔 Webhook nếu là Secret
+
+		task.wait(0.5)
+
+		-- 🔔 Gửi webhook nếu là pet Secret
 		local data = animalsData[pet.Name]
-		if data and data.Rarity == "Secret" then
-			local overhead = pet.HRP:FindFirstChild("Info") and pet.HRP.Info:FindFirstChild("AnimalOverhead")
-			local mutationText = "None"
-			if overhead then
-				local mut = overhead:FindFirstChild("Mutation")
-				if mut and mut:IsA("TextLabel") and mut.Text ~= "{Mutation_Name}" then
-					mutationText = mut.Text
-				end
+		local rarity = data and data.Rarity or "Unknown"
+
+		local overhead = pet.HRP:FindFirstChild("Info") and pet.HRP.Info:FindFirstChild("AnimalOverhead")
+		local mutation = "None"
+		if overhead then
+			local mut = overhead:FindFirstChild("Mutation")
+			if mut and mut:IsA("TextLabel") then
+				local raw = mut.Text
+				mutation = (raw == "" or raw == "{Mutation_Name}") and "None" or raw
 			end
-			sendWebhook(pet.Name, data.Rarity, mutationText)
 		end
+
+		sendGlobalWebhook(pet.Name, rarity, mutation)
+		sendWebhook(pet.Name, rarity, mutation)
 		resetCharacter()
 		wait(5)
 		return true
 	end
+
 	return false
 end
 
@@ -563,7 +628,9 @@ local function removeLowestRarityPet()
 
 	-- ❗ Giới hạn xoá theo Cash
 	local allowedMaxRarity = nil
-	if cash >= 50000000 then
+	if cash >= 100000000 then
+		allowedMaxRarity = rarityOrder["Brainrot God"]
+	elseif cash >= 50000000 then
 		allowedMaxRarity = rarityOrder["Mythic"]
 	elseif cash >= 7000000 then
 		allowedMaxRarity = rarityOrder["Legendary"]
@@ -603,7 +670,7 @@ local function removeLowestRarityPet()
 					local generationValue = tonumber(string.match(genLabel.Text, "%d+")) or 0
 
 					if rarityValue then
-						if rarity == "Brainrot God" or rarity == "Secret" then
+						if rarity == "Secret" then
 							print("🔒 Skip VIP pet:", petName)
 						elseif rarityValue <= allowedMaxRarity then
 							if
