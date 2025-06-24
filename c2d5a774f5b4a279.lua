@@ -178,7 +178,7 @@ local rarityOrder = {
 	Secret = 7
 }
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1328580562809655296/HifNcSSBVdggY9ujsqom0ZQLkIPSFMEgq3ss6ZSCSQNNZoe70AE4UgNLASNQT27vi-dJ" -- 🔁 Thay bằng webhook của bạn
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1386869068052562060/-YmAMWY8CIa0EfFHWVDdYI5VdHs3o4QrBSLhEoNlp_H1tIy5QUcKcK4XuRVdKlTFfByW" -- 🔁 Thay bằng webhook của bạn
 
 local function resetCharacter()
 	local character = player.Character
