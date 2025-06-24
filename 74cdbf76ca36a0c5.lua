@@ -339,7 +339,6 @@ local function UI()
 		end
 	end)
 end
-UI()
 local function spinCam()
 	local RunService = game:GetService("RunService")
 	local Players = game:GetService("Players")
