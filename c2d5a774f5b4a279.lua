@@ -1,8 +1,3 @@
-getgenv().Webhook = {
-    Enabled = true, -- Bật/tắt gửi webhook
-    Url = "https://discord.com/api/webhooks/1328580562809655296/HifNcSSBVdggY9ujsqom0ZQLkIPSFMEgq3ss6ZSCSQNNZoe70AE4UgNLASNQT27vi-dJ", -- Thay bằng webhook của bạn
-    PingID = "679141731337240577" -- ID user/role để ping
-}
 
 while not game:IsLoaded() do task.wait() end
 
