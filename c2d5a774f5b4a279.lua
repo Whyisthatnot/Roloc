@@ -562,34 +562,41 @@ local function sendGlobalWebhook(petName, rarity, mutation)
         warn("❌ Executor không hỗ trợ gửi webhook.")
     end
 end
-
 local function tryBuyPet(pet)
 	buyingEnabled = true
 
 	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	if not hrp or not pet.HRP then return end
+	if not hrp or not pet.HRP then return false end
 
 	if (hrp.Position - pet.HRP.Position).Magnitude > 6 then
-		if not walkToSmooth(pet.HRP) then return end
+		if not walkToSmooth(pet.HRP) then return false end
 	end
 
 	local prompt = pet.HRP:FindFirstChildWhichIsA("ProximityPrompt", true)
-	if prompt then
-		print("💰 Buying pet:", pet.Name)
-		fireproximityprompt(prompt, 0)
-		task.spawn(function()
-			task.wait(prompt.HoldDuration or 2)
-			fireproximityprompt(prompt, 1)
-		end)
+	if not prompt then return false end
 
-		task.wait(0.5)
+	print("💰 Buying pet:", pet.Name)
+	fireproximityprompt(prompt, 0)
+	task.wait(prompt.HoldDuration or 2)
+	fireproximityprompt(prompt, 1)
 
-		-- 🔔 Gửi webhook nếu là pet Secret
+	-- ✅ Chờ xem pet có biến mất không → nghĩa là đã mua
+	local timeout = 10
+	while timeout > 0 and pet.HRP and pet.HRP.Parent do
+		task.wait(0.2)
+		timeout -= 0.2
+	end
+
+	local boughtSuccessfully = not (pet.HRP and pet.HRP.Parent)
+
+	if boughtSuccessfully then
+		print("✅ Pet", pet.Name, "bought successfully!")
+		
 		local data = animalsData[pet.Name]
 		local rarity = data and data.Rarity or "Unknown"
 
-		local overhead = pet.HRP:FindFirstChild("Info") and pet.HRP.Info:FindFirstChild("AnimalOverhead")
 		local mutation = "None"
+		local overhead = pet.HRP:FindFirstChild("Info") and pet.HRP.Info:FindFirstChild("AnimalOverhead")
 		if overhead then
 			local mut = overhead:FindFirstChild("Mutation")
 			if mut and mut:IsA("TextLabel") then
@@ -598,15 +605,22 @@ local function tryBuyPet(pet)
 			end
 		end
 
-		sendGlobalWebhook(pet.Name, rarity, mutation)
-		sendWebhook(pet.Name, rarity, mutation)
+		if rarity == "Secret" then
+			sendGlobalWebhook(pet.Name, rarity, mutation)
+			sendWebhook(pet.Name, rarity, mutation)
+		end
+
 		resetCharacter()
-		wait(5)
+		player.CharacterAdded:Wait()
+		wait(0.2)
 		return true
+	else
+		print("❌ Failed to buy pet:", pet.Name, "(may have been bought by someone else)")
 	end
 
 	return false
 end
+
 
 
 local function removeLowestRarityPet()
