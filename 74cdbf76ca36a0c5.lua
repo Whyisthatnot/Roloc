@@ -127,6 +127,13 @@ task.spawn(function()
         wait(10) -- Kiểm tra lại mỗi 10 giây
     end
 end)
+
+task.spawn(function()
+    while task.wait(1) do
+        equipItemWhenAvailable()
+	end
+end)
+
 local function antiAFK()
     while true do
         wait(60)
@@ -332,7 +339,7 @@ local function UI()
 		end
 	end)
 end
-
+UI()
 local function spinCam()
 	local RunService = game:GetService("RunService")
 	local Players = game:GetService("Players")
