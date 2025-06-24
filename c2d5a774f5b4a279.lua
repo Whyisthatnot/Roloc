@@ -170,7 +170,7 @@ local rarityOrder = {
 	Secret = 7
 }
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1326348381806788628/fIT83ECRZGUl5AuAFsRvQk_JjMsJVoJOwekEAr7KAHUAD6GZMxQmcEL4eRMv22KFSI3U" -- 🔁 Thay bằng webhook của bạn
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1378188561811243068/V470g738Dt2BQ1pFHHQCVaS-zuy3OxOKcleNczxeuPzSmViWEYgHQQNQmerQHd4_E5Jx" -- 🔁 Thay bằng webhook của bạn
 local TAG_USER_ID = "679141731337240577" -- 🏷️ Thay bằng ID Discord user/role bạn muốn ping
 
 local function resetCharacter()
