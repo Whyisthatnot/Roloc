@@ -6,18 +6,16 @@ _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
 _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
-_G.AutoVoidSpin = true
+_G.AutoElectricSpin = true
 _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Void Burst"] = 4,   -- Tên Pet = Số lượng mỗi lần ép
     }
 }
 -- [[ CONFIGURATION ]]
 _G.AutoRainbow = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["40M Void Burst"] = 5,
     }
 }
 
@@ -81,7 +79,6 @@ local function SmartCleanInventory()
 
     -- 2. Bảng ưu tiên Bậc (Tier)
     local TierPriority = {
-        ["Void"] = 4,
         ["Rainbow"] = 3,
         ["Golden"] = 2,
         ["Normal"] = 1
@@ -123,7 +120,7 @@ local function SmartCleanInventory()
 
     -- 4. Xác định danh sách xóa
     local idsToDelete = {}
-    local MAX_KEEP = 50 -- Giữ lại 80 con tốt nhất
+    local MAX_KEEP = 80 -- Giữ lại 80 con tốt nhất
 
     for i, pet in ipairs(allPets) do
         -- Những con nằm ngoài top 80 sau khi đã sắp xếp theo độ hiếm + bậc sẽ bị xóa
@@ -166,16 +163,14 @@ local function RunAutoEgg()
         -- Lấy số Clicks hiện tại 
         local currentClicks = stats["Clicks"] or 0
         
-        -- LOGIC: Nếu tiền từ 1t trở lên, bắt buộc tìm mua trứng Void
         if currentClicks >= ONE_TRILLION then
             for eggName, _ in pairs(EggDatabase) do
-                if string.find(string.lower(eggName), "void") then
+                if string.find(string.lower(eggName), "lightning") then
                     return eggName
                 end
             end
         end
 
-        -- LOGIC: Nếu dưới 1t hoặc không tìm thấy trứng Void, mua Best Egg đắt nhất có thể
         local bestEgg = nil
         local maxPrice = -1
 
@@ -195,7 +190,6 @@ local function RunAutoEgg()
 
     -- Vòng lặp thực thi
     task.spawn(function()
-        print("DEBUG: Auto Egg 1T Started - Checking for Void or Best Egg...")
         while _G.AutoHatch == true do
             local target = GetTargetEgg()
             if target then
@@ -562,16 +556,16 @@ for _, gui in ipairs(playerGui:GetChildren()) do
 end
 
 task.spawn(function()
-    while _G.AutoVoidSpin do
+    while _G.AutoElectricSpin do
         -- Lấy dữ liệu lượt quay từ Replication module
         local data = Replication.Data
-        local spins = data and data.Items and data.Items.VoidSpins or 0
+        local spins = data and data.Items and data.Items.ElectricSpins or 0
         
         -- Chỉ quay nếu có lượt (> 0) và không đang trong quá trình quay (_G.Spinning)
         if spins > 0 and not _G.Spinning then
             -- Gọi server để quay
-            Network:InvokeServer("SpinWheel", "VoidSpinWheel")
-            print("Spun Void Wheel! Remaining: " .. (spins - 1))
+            Network:InvokeServer("SpinWheel", "ElectricSpinWheel")
+            print("Spun Wheel! Remaining: " .. (spins - 1))
             
             -- Đợi vòng quay kết thúc (khoảng 7 giây)
             task.wait(7)
