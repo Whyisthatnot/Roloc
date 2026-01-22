@@ -513,7 +513,6 @@ local function RunAutoRainbow()
 
     if needClaim or (canCraft and slotCount < 3) then
         RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS)
-        LocalPlayer:RequestStreamAroundAsync(RAINBOW_MACHINE_POS.Position)
         task.wait()
 
         for slotId, data in pairs(activeCrafts) do
@@ -595,7 +594,7 @@ ScreenGui.Name = 'FullOverlayStats'
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 2147483647 
 ScreenGui.IgnoreGuiInset = true 
-ScreenGui.Parent = (gethui and gethui()) or CoreGui
+ScreenGui.Parent = (gethui and gethui())
 
 --// NỀN ĐEN PHỦ TOÀN MÀN HÌNH
 local Background = Instance.new('Frame')
