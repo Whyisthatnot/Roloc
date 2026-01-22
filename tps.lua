@@ -155,7 +155,7 @@ task.spawn(function()
                 warn("Lỗi SmartCleanInventory: " .. tostring(err))
             end
         end
-                task.wait(1) 
+            task.wait(1) 
     end
 end)
 
@@ -223,7 +223,6 @@ local function RunAutoEgg()
             
             task.wait(0.1) -- Delay để không bị lag máy
         end
-        print("--- Auto Hatch Stopped ---")
     end)
 end
 
