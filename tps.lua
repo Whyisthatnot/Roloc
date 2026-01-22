@@ -671,24 +671,42 @@ local function updateEggsPerMin()
     EggsMinLabel.Text = "EGGS/MIN: " .. #eggHistory
 end
 
---// LOGIC CẬP NHẬT LEADERSTATS
+--// Tìm đoạn local function updateLeaderstats và thay thế bằng đoạn này:
+
+local initialEggs = nil -- Biến lưu số trứng ban đầu
+
 local function updateLeaderstats()
     local leaderstats = LocalPlayer:WaitForChild("leaderstats", 20)
     if leaderstats then
         local function setupStat(statName, label, prefix)
             local stat = leaderstats:FindFirstChild(statName)
             if stat then
-                label.Text = prefix .. ": " .. tostring(stat.Value)
+                -- Thiết lập giá trị ban đầu cho Eggs
+                if statName == "Eggs" and initialEggs == nil then
+                    initialEggs = stat.Value
+                end
+
+                -- Hàm cập nhật hiển thị chữ
+                local function refreshText()
+                    if statName == "Eggs" then
+                        local gained = stat.Value - initialEggs
+                        label.Text = string.format("EGGS: %d (+%d)", stat.Value, gained)
+                    else
+                        label.Text = prefix .. ": " .. tostring(stat.Value)
+                    end
+                end
+
+                refreshText() -- Chạy lần đầu
                 
                 stat:GetPropertyChangedSignal("Value"):Connect(function()
-                    -- Nếu là Eggs, ghi nhận thời gian để tính Eggs/Min
                     if statName == "Eggs" then
                         table.insert(eggHistory, tick())
                     end
-                    label.Text = prefix .. ": " .. tostring(stat.Value)
+                    refreshText()
                 end)
             end
         end
+        
         setupStat("Clicks", ClicksLabel, "CLICKS")
         setupStat("Eggs", EggsLabel, "EGGS")
         setupStat("Rarest", RarestLabel, "RAREST")
