@@ -10,9 +10,6 @@ _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
         "Luck",
-        "Tap",
-        "Gem",
-        "Rebirth",
         "Taco",
         "Octo"
     }
@@ -673,42 +670,45 @@ task.spawn(function()
     
     print("--- Đã dừng Auto Potion ---")
 end)
-
-local VirtualInventory = {}
-local isInitialized = false
-
-local function SyncAndUse()
-    local realInventory = Replication.Data and Replication.Data.Boosts
+local function RunAutoPotion()
+    -- Lấy dữ liệu túi đồ thực tế từ server
+    local data = Replication.Data
+    local realInventory = data and data.Boosts
+    
     if not realInventory then return end
 
-    if not isInitialized then
-        for id, count in pairs(realInventory) do
-            VirtualInventory[id] = count
-        end
-        isInitialized = true
-    end
-
-    for id, count in pairs(VirtualInventory) do
+    -- Duyệt trực tiếp qua túi đồ thật
+    for id, count in pairs(realInventory) do
+        -- Nếu còn Potion trong túi
         if count > 0 then
+            -- So sánh với danh sách keyword bạn muốn dùng trong _G.AutoPotion["Use"]
             for _, keyword in pairs(_G.AutoPotion["Use"]) do
                 if string.find(string.lower(id), string.lower(keyword)) then
-                    VirtualInventory[id] = VirtualInventory[id] - 1
+                    
+                    -- Thực thi dùng Potion
                     task.spawn(function()
-                        Network:InvokeServer("UseBoost", id)
+                        local success = Network:InvokeServer("UseBoost", id)
+                        if success then
+                            -- print("⭐ Đã sử dụng: " .. id)
+                        end
                     end)
-                    task.wait(0.1)
+                    
+                    -- Đợi một chút để tránh gửi quá nhiều yêu cầu cùng lúc (tránh lag/kick)
+                    task.wait(0.2)
                 end
             end
         end
     end
 end
 
+-- Luồng chạy Auto Potion
 task.spawn(function()
     while true do
-        if _G.AutoPotion["Enabled"] then
-            pcall(SyncAndUse)
+        if _G.AutoPotion and _G.AutoPotion["Enabled"] then
+            pcall(RunAutoPotion)
         end
-        task.wait(1)
+        -- Kiểm tra lại sau mỗi 2-5 giây là hợp lý nhất để tránh tốn tài nguyên
+        task.wait() 
     end
 end)
 --------------------------
@@ -855,5 +855,13 @@ task.spawn(function()
         task.wait(50)
     end
 end)
+
+local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+for _, gui in ipairs(playerGui:GetChildren()) do
+    if gui:IsA("ScreenGui") then
+        gui.Enabled = false
+    end
+end
 ----------------
 --end
