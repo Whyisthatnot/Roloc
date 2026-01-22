@@ -513,7 +513,8 @@ local function RunAutoRainbow()
 
     if needClaim or (canCraft and slotCount < 3) then
         RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS)
-        task.wait(1.5)
+        LocalPlayer:RequestStreamAroundAsync(RAINBOW_MACHINE_POS.Position)
+        task.wait()
 
         for slotId, data in pairs(activeCrafts) do
             if data.EndTime - workspace:GetServerTimeNow() <= 0 then
@@ -600,7 +601,7 @@ ScreenGui.Parent = (gethui and gethui()) or CoreGui
 local Background = Instance.new('Frame')
 Background.Size = UDim2.new(1, 0, 1, 0) 
 Background.BackgroundColor3 = Color3.new(0, 0, 0) 
-Background.BackgroundTransparency = 0
+Background.BackgroundTransparency = 0.5 
 Background.BorderSizePixel = 0
 Background.Parent = ScreenGui
 
