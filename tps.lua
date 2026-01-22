@@ -1,21 +1,26 @@
--- [[ CONFIGURATION ]]
-_G.AutoTap = true
-_G.AutoHatch = true
+
 _G.AutoRebirthMax = true
 _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
 _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
 _G.AutoElectricSpin = true
+_G.AutoHatch = {
+    ["Enabled"] = true,
+    ["Egg"] = {
+        ["Lightning Event"] = true,
+    }
+}
 _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
+        ["Electrical Glitch"] = 4,
     }
 }
--- [[ CONFIGURATION ]]
 _G.AutoRainbow = {
     ["Enabled"] = true,
     ["Pets"] = {
+        ["Electrical Glitch"] = 5,
     }
 }
 
@@ -31,6 +36,7 @@ local Player = game.Players.LocalPlayer
 local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
 local GemShopData = require(game:GetService("ReplicatedStorage").Game.GemShop)
 local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
+local EggDatabase = require(ReplicatedStorage.Game.Eggs)
 
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
@@ -140,71 +146,91 @@ local function SmartCleanInventory()
         end
     end
 end
-
-if _G.AutoHatch == true then
-    task.spawn(function()
-        while true do
-            pcall(SmartCleanInventory)
-            task.wait(1) -- Chạy mỗi 5 phút
-        end
-    end)
-end
-
-local function RunAutoEgg()
-    local EggDatabase = require(ReplicatedStorage.Game.Eggs) -- 
-    
-    -- Mốc tiền 1 Trình (1,000,000,000,000)
-    local ONE_TRILLION = 1000000000000
-
-    local function GetTargetEgg()
-        local stats = Replication.Data and Replication.Data.Statistics -- 
-        if not stats then return nil end
-        
-        -- Lấy số Clicks hiện tại 
-        local currentClicks = stats["Clicks"] or 0
-        
-        if currentClicks >= ONE_TRILLION then
-            for eggName, _ in pairs(EggDatabase) do
-                if string.find(string.lower(eggName), "lightning") then
-                    return eggName
-                end
+task.spawn(function()
+    while true do
+        -- Kiểm tra điều kiện bên trong vòng lặp
+        if type(_G.AutoHatch) == "table" and _G.AutoHatch.Enabled == true then
+            local success, err = pcall(SmartCleanInventory)
+            if not success then
+                warn("Lỗi SmartCleanInventory: " .. tostring(err))
             end
         end
+                task.wait(1) 
+    end
+end)
 
-        local bestEgg = nil
-        local maxPrice = -1
 
-        for eggName, eggData in pairs(EggDatabase) do
-            if type(eggData) == "table" and eggData.Price then -- 
-                local price = eggData.Price
-                local currency = eggData.Currency or "Clicks" -- 
-                
-                if stats[currency] and price <= stats[currency] and price > maxPrice then
+local function GetTargetEgg()
+    local stats = Replication.Data and Replication.Data.Statistics
+    if not stats then return nil end
+    
+    local currentClicks = stats["Clicks"] or 0
+    local ONE_TRILLION = 1000000000000
+
+    -- 1. Nếu đạt mốc 1 Trình (1T) Clicks -> Tìm trứng trong danh sách Config
+    if currentClicks >= ONE_TRILLION then
+        for targetName, isEnabled in pairs(_G.AutoHatch["Egg"]) do
+            if isEnabled and EggDatabase[targetName] then
+                return targetName
+            end
+        end
+        
+        -- Dự phòng: Nếu tên trong config không khớp chính xác, tìm theo từ khóa "lightning"
+        for eggName, _ in pairs(EggDatabase) do
+            if string.find(string.lower(eggName), "lightning") then
+                return eggName
+            end
+        end
+    end
+
+    -- 2. Nếu chưa đủ 1T -> Tìm Best Egg (Trứng đắt nhất có thể mua bằng Clicks)
+    local bestEgg = nil
+    local maxPrice = -1
+
+    for eggName, eggData in pairs(EggDatabase) do
+        if type(eggData) == "table" and eggData.Price then
+            local price = eggData.Price
+            local currency = eggData.Currency or "Clicks"
+            
+            -- Chỉ tìm trứng mua bằng Clicks để làm Best Egg
+            if currency == "Clicks" and price <= currentClicks then
+                if price > maxPrice then
                     maxPrice = price
                     bestEgg = eggName
                 end
             end
         end
-        return bestEgg
     end
+    
+    return bestEgg
+end
 
-    -- Vòng lặp thực thi
+local function RunAutoEgg()
+    -- Check đúng vào Key "Enabled" trong Table của bạn
+    if type(_G.AutoHatch) ~= "table" or not _G.AutoHatch["Enabled"] then return end
+    
+    
     task.spawn(function()
-        while _G.AutoHatch == true do
+        while type(_G.AutoHatch) == "table" and _G.AutoHatch["Enabled"] do
             local target = GetTargetEgg()
+            
             if target then
-                -- InvokeServer theo cấu trúc game: OpenEgg, Tên trứng, Số lượng, Bảng xóa pet 
                 pcall(function()
-                    Network:InvokeServer("OpenEgg", target, 3, {}) -- 
+                    -- Invoke mở trứng: Tên, Số lượng (3), Table xóa (để trống)
+                    Network:InvokeServer("OpenEgg", target, 3, {})
                 end)
             end
-            task.wait() -- Delay an toàn để tránh bị hệ thống chặn 
+            
+            task.wait(0.1) -- Delay để không bị lag máy
         end
+        print("--- Auto Hatch Stopped ---")
     end)
 end
 
--- Kích hoạt function
+-- Chạy script
 RunAutoEgg()
+
+
 
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 3: LOGIC REBIRTH, WORLD & QUEST ]]
@@ -240,7 +266,6 @@ task.spawn(function()
                     
                     if success then
                         lastRebirthTick = tick()
-                        print(">>> ĐÃ REBIRTH TẠI INDEX: " .. maxIdx)
                     end
                     
                     task.wait(0.2)
@@ -415,7 +440,6 @@ local function RunAutoCraftGolden()
 
     -- 3. Thực hiện Teleport và Ép
     if needsToTeleport then
-        print(">>> Đang Teleport về máy Golden...")
         RootPart.CFrame = CFrame.new(GOLDEN_MACHINE_POS)
         task.wait(0.6) -- Đợi server nhận vị trí
 
@@ -441,15 +465,12 @@ local function RunAutoCraftGolden()
             end
         end
 
-        -- 4. Quay lại vị trí cũ sau khi ép xong
-        print(">>> Quay lại vị trí cũ...")
         RootPart.CFrame = oldCFrame
     end
 end
 
 -- Vòng lặp kiểm tra mỗi 10 giây
 task.spawn(function()
-    print(">>> AUTO GOLDEN (RETURN TO FARM) READY <<<")
     while true do
         if _G.AutoGoldenConfig and _G.AutoGoldenConfig.Enabled then
             pcall(RunAutoCraftGolden)
@@ -546,7 +567,6 @@ for _, item in ipairs(workspace:GetDescendants()) do
     end
 end
 
-print("Đã ẩn Workspace và neo tất cả HumanoidRootPart!")
 local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 
 for _, gui in ipairs(playerGui:GetChildren()) do
