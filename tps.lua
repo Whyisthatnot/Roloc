@@ -11,8 +11,6 @@ _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
         ["Void Burst"] = 4,   -- Tên Pet = Số lượng mỗi lần ép
-        ["Abyssal Raven"] = 4
-
     }
 }
 -- [[ CONFIGURATION ]]
@@ -20,7 +18,6 @@ _G.AutoRainbow = {
     ["Enabled"] = true,
     ["Pets"] = {
         ["40M Void Burst"] = 5,
-        ["Abyssal Raven"] = 5,
     }
 }
 
@@ -64,8 +61,6 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
-
-
 local function SmartCleanInventory()
     local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
     local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
@@ -74,7 +69,17 @@ local function SmartCleanInventory()
     local inventory = Replication.Data.Pets
     if not inventory then return end
 
-    -- Bảng xếp hạng bậc (Tier) để so sánh
+    -- 1. Bảng ưu tiên Độ hiếm (Càng cao càng quan trọng)
+    local RarityPriority = {
+        ["Mythical"] = 5,
+        ["Legendary"] = 4,
+        ["Epic"] = 3,
+        ["Rare"] = 2,
+        ["Uncommon"] = 1,
+        ["Common"] = 0
+    }
+
+    -- 2. Bảng ưu tiên Bậc (Tier)
     local TierPriority = {
         ["Void"] = 4,
         ["Rainbow"] = 3,
@@ -82,6 +87,7 @@ local function SmartCleanInventory()
         ["Normal"] = 1
     }
 
+    -- Các loại cực hiếm thì không bao giờ đưa vào danh sách xóa
     local SafeRarities = {
         ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, 
         ["Godly"] = true, ["Divine"] = true, ["Celestial"] = true, ["Exotic"] = true
@@ -89,64 +95,54 @@ local function SmartCleanInventory()
     
     local allPets = {}
     
-    -- 1. Thu thập danh sách pet có thể xóa
     for id, data in pairs(inventory) do
         local stats = PetStats:GetStats(data.Name)
         local rarity = stats and stats.Rarity or "Common"
         local tier = data.Tier or "Normal"
         
-        -- Bỏ qua pet đang dùng, bị khóa hoặc hàng hiếm
         if data.Equipped or data.Locked or SafeRarities[rarity] then
             continue 
         end
 
         table.insert(allPets, {
             id = id,
-            tierName = tier,
-            tierLevel = TierPriority[tier] or 0 -- Lấy điểm số bậc
+            rarityLevel = RarityPriority[rarity] or 0, -- Điểm độ hiếm
+            tierLevel = TierPriority[tier] or 0        -- Điểm bậc
         })
     end
 
-    -- 2. Sắp xếp: Thằng nào bậc cao (Void, Rainbow) nằm lên đầu
+    -- 3. Sắp xếp đa tầng:
     table.sort(allPets, function(a, b) 
+        -- Nếu độ hiếm khác nhau, con nào hiếm hơn (Mythical > Legendary) đứng trước
+        if a.rarityLevel ~= b.rarityLevel then
+            return a.rarityLevel > b.rarityLevel
+        end
+        -- Nếu cùng độ hiếm, con nào bậc cao hơn (Rainbow > Golden) đứng trước
         return a.tierLevel > b.tierLevel 
     end)
 
-    -- 3. Xác định danh sách xóa
+    -- 4. Xác định danh sách xóa
     local idsToDelete = {}
-    local MAX_KEEP = 80 -- Giữ lại 80 con tốt nhất theo bậc
+    local MAX_KEEP = 80 -- Giữ lại 80 con tốt nhất
 
     for i, pet in ipairs(allPets) do
-        -- Nếu vượt quá số lượng giữ lại (80), hoặc nếu con này bậc thấp hơn con đã giữ
+        -- Những con nằm ngoài top 80 sau khi đã sắp xếp theo độ hiếm + bậc sẽ bị xóa
         if i > MAX_KEEP then
             table.insert(idsToDelete, pet.id)
         end
     end
 
-    -- 4. Thực thi xóa
+    -- 5. Thực thi xóa
     if #idsToDelete > 0 then
         for _, petId in pairs(idsToDelete) do
-            -- Kiểm tra lại lần cuối để tránh xóa nhầm pet đang trang bị (nếu data cập nhật chậm)
             local currentPet = Replication.Data.Pets[petId]
             if currentPet and not currentPet.Equipped then
                 Network:InvokeServer("DeletePet", petId)
-                task.wait(0.02) -- Tốc độ xóa nhanh hơn một chút
+                task.wait(0.05) -- Để 0.05 cho an toàn, tránh bị lag/kick
             end
         end
     end
 end
-task.spawn(function()
-    -- Vòng lặp tự động chạy mỗi 60 giây
-    while _G.AutoHatch == true do
-        pcall(function()
-            local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
-            Network:InvokeServer("EquipBest")
-            task.wait(1)
-            SmartCleanInventory()
-        end)
-        task.wait(1)
-    end
-end)
 
 local function RunAutoEgg()
     local EggDatabase = require(ReplicatedStorage.Game.Eggs) -- 
@@ -458,14 +454,7 @@ task.spawn(function()
         task.wait(1)
     end
 end)
--- [[ CONFIGURATION ]]
-_G.AutoRainbow = {
-    ["Enabled"] = true,
-    ["Pets"] = {
-        ["40M Void Burst"] = 5,
-        ["Abyssal Raven"] = 5,
-    }
-}
+
 
 local RAINBOW_MACHINE_POS = Vector3.new(1205.83, 668.98, -13383.21)
 
