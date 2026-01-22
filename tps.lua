@@ -123,7 +123,7 @@ local function SmartCleanInventory()
 
     -- 4. Xác định danh sách xóa
     local idsToDelete = {}
-    local MAX_KEEP = 80 -- Giữ lại 80 con tốt nhất
+    local MAX_KEEP = 50 -- Giữ lại 80 con tốt nhất
 
     for i, pet in ipairs(allPets) do
         -- Những con nằm ngoài top 80 sau khi đã sắp xếp theo độ hiếm + bậc sẽ bị xóa
