@@ -5,6 +5,15 @@ _G.AutoBuyWorld = true
 _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
 _G.AutoElectricSpin = true
+_G.AutoBuyPotion = true
+_G.AutoPotion = {
+    ["Enabled"] = true,
+    ["Use"] = {
+        "Luck",
+        "Taco",
+        "Octo"
+    }
+}
 _G.AutoHatch = {
     ["Enabled"] = true,
     ["Egg"] = {
@@ -159,7 +168,6 @@ task.spawn(function()
     end
 end)
 
-
 local function GetTargetEgg()
     local stats = Replication.Data and Replication.Data.Statistics
     if not stats then return nil end
@@ -167,7 +175,7 @@ local function GetTargetEgg()
     local currentClicks = stats["Clicks"] or 0
     local ONE_TRILLION = 1000000000000
 
-    -- 1. Nếu đạt mốc 1 Trình (1T) Clicks -> Tìm trứng trong danh sách Config
+    -- 1. Nếu đạt mốc 1 Trình (1T) Clicks
     if currentClicks >= ONE_TRILLION then
         for targetName, isEnabled in pairs(_G.AutoHatch["Egg"]) do
             if isEnabled and EggDatabase[targetName] then
@@ -175,7 +183,6 @@ local function GetTargetEgg()
             end
         end
         
-        -- Dự phòng: Nếu tên trong config không khớp chính xác, tìm theo từ khóa "lightning"
         for eggName, _ in pairs(EggDatabase) do
             if string.find(string.lower(eggName), "lightning") then
                 return eggName
@@ -183,7 +190,7 @@ local function GetTargetEgg()
         end
     end
 
-    -- 2. Nếu chưa đủ 1T -> Tìm Best Egg (Trứng đắt nhất có thể mua bằng Clicks)
+    -- 2. Nếu chưa đủ 1T -> Tìm Best Egg
     local bestEgg = nil
     local maxPrice = -1
 
@@ -192,7 +199,6 @@ local function GetTargetEgg()
             local price = eggData.Price
             local currency = eggData.Currency or "Clicks"
             
-            -- Chỉ tìm trứng mua bằng Clicks để làm Best Egg
             if currency == "Clicks" and price <= currentClicks then
                 if price > maxPrice then
                     maxPrice = price
@@ -206,29 +212,36 @@ local function GetTargetEgg()
 end
 
 local function RunAutoEgg()
-    -- Check đúng vào Key "Enabled" trong Table của bạn
     if type(_G.AutoHatch) ~= "table" or not _G.AutoHatch["Enabled"] then return end
     
-    
     task.spawn(function()
+        
         while type(_G.AutoHatch) == "table" and _G.AutoHatch["Enabled"] do
             local target = GetTargetEgg()
             
             if target then
+                -- KIỂM TRA BOOST OCTO HATCH
+                local hatchAmount = 3 -- Mặc định mở 3 trứng
+                local activeBoosts = Replication.Data and Replication.Data.ActiveBoosts
+
+                -- Nếu loại 'Octo Incubator' đang hoạt động và chưa hết hạn
+                if activeBoosts and activeBoosts["Octo Incubator"] and activeBoosts["Octo Incubator"] > 0 then
+                    hatchAmount = 8
+                end
+
                 pcall(function()
-                    -- Invoke mở trứng: Tên, Số lượng (3), Table xóa (để trống)
-                    Network:InvokeServer("OpenEgg", target, 3, {})
+                    -- Sử dụng biến hatchAmount (3 hoặc 8)
+                    Network:InvokeServer("OpenEgg", target, hatchAmount, {})
                 end)
             end
             
-            task.wait(0.1) -- Delay để không bị lag máy
+            task.wait(0.1)
         end
+        
     end)
 end
 
--- Chạy script
 RunAutoEgg()
-
 
 
 --- --- --- --- --- --- --- --- --- --- --- --- ---
@@ -593,154 +606,201 @@ task.spawn(function()
         task.wait(2) -- Kiểm tra lại sau mỗi 2 giây
     end
 end)
+
+task.spawn(function()
+    
+    while _G.AutoBuyPotion == true do
+        local data = Replication.Data
+        if data and data.PotionMachine then
+            local currentTime = os.time()
+            
+            -- Ưu tiên mua gói 10 trước, rồi đến 3, rồi đến 1
+            -- Logic này dựa trên cooldown10, cooldown3, cooldown1 trong code bạn đưa
+            
+            if data.PotionMachine.Cooldown10 - currentTime <= 0 then
+                print("Đang mua x10 Potions...")
+                local result = Network:InvokeServer("BuyPotionMachine", 10)
+                task.wait(1) -- Đợi server xử lý
+            
+            elseif data.PotionMachine.Cooldown3 - currentTime <= 0 then
+                print("Đang mua x3 Potions...")
+                local result = Network:InvokeServer("BuyPotionMachine", 3)
+                task.wait(1)
+                
+            elseif data.PotionMachine.Cooldown1 - currentTime <= 0 then
+                print("Đang mua x1 Potion...")
+                local result = Network:InvokeServer("BuyPotionMachine", 1)
+                task.wait(1)
+            end
+        end
+        task.wait(5) -- Kiểm tra lại mỗi 5 giây để tránh spam
+    end
+    
+    print("--- Đã dừng Auto Potion ---")
+end)
+
+local VirtualInventory = {}
+local isInitialized = false
+
+local function SyncAndUse()
+    local realInventory = Replication.Data and Replication.Data.Boosts
+    if not realInventory then return end
+
+    if not isInitialized then
+        for id, count in pairs(realInventory) do
+            VirtualInventory[id] = count
+        end
+        isInitialized = true
+    end
+
+    for id, count in pairs(VirtualInventory) do
+        if count > 0 then
+            for _, keyword in pairs(_G.AutoPotion["Use"]) do
+                if string.find(string.lower(id), string.lower(keyword)) then
+                    VirtualInventory[id] = VirtualInventory[id] - 1
+                    task.spawn(function()
+                        Network:InvokeServer("UseBoost", id)
+                    end)
+                    task.wait(0.1)
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        if _G.AutoPotion["Enabled"] then
+            pcall(SyncAndUse)
+        end
+        task.wait(1)
+    end
+end)
 --------------------------
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
 local CoreGui = game:GetService('CoreGui')
 local LocalPlayer = Players.LocalPlayer
+---------------------------------------------------------
+-- [[ PHẦN FIX GUI & LOGIC TÍNH TOÁN CHUẨN (+232) ]]
+---------------------------------------------------------
 
---// KHỞI TẠO GUI GỐC
 local ScreenGui = Instance.new('ScreenGui')
 ScreenGui.Name = 'FullOverlayStats'
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 2147483647 
 ScreenGui.IgnoreGuiInset = true 
-ScreenGui.Parent = (gethui and gethui())
+ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
 
---// NỀN ĐEN PHỦ TOÀN MÀN HÌNH
-local Background = Instance.new('Frame')
+local Background = Instance.new('Frame', ScreenGui)
 Background.Size = UDim2.new(1, 0, 1, 0) 
 Background.BackgroundColor3 = Color3.new(0, 0, 0) 
 Background.BackgroundTransparency = 0.5 
 Background.BorderSizePixel = 0
-Background.Parent = ScreenGui
 
---// KHUNG CHÍNH CHỨA CHỮ
-local MainFrame = Instance.new('Frame')
+local MainFrame = Instance.new('Frame', Background)
 MainFrame.Size = UDim2.new(0.9, 0, 0.9, 0)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.BackgroundTransparency = 1
-MainFrame.Parent = Background
 
-local AspectRatio = Instance.new("UIAspectRatioConstraint")
-AspectRatio.AspectRatio = 1.4 -- Adjusted for the extra line
-AspectRatio.AspectType = Enum.AspectType.ScaleWithParentSize
-AspectRatio.Parent = MainFrame
-
-local Layout = Instance.new('UIListLayout')
-Layout.Parent = MainFrame
+local Layout = Instance.new('UIListLayout', MainFrame)
 Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 Layout.VerticalAlignment = Enum.VerticalAlignment.Center
 Layout.Padding = UDim.new(0.012, 0)
 
---// HÀM TẠO LABEL
 local function createLabel(name, text, color, order)
-    local label = Instance.new('TextLabel')
+    local label = Instance.new('TextLabel', MainFrame)
     label.Name = name
     label.Text = text
     label.TextColor3 = color
     label.Font = Enum.Font.LuckiestGuy
     label.BackgroundTransparency = 1
-    label.Size = UDim2.new(0.9, 0, 0.09, 0)
+    label.Size = UDim2.new(0.9, 0, 0.08, 0)
     label.TextScaled = true 
     label.LayoutOrder = order
-
-    local SizeConstraint = Instance.new("UITextSizeConstraint")
-    SizeConstraint.MaxTextSize = 80
-    SizeConstraint.MinTextSize = 10
-    SizeConstraint.Parent = label
-
-    local UIStroke = Instance.new('UIStroke')
+    local UIStroke = Instance.new('UIStroke', label)
     UIStroke.Thickness = 2.5
-    UIStroke.Color = Color3.new(0, 0, 0)
-    UIStroke.Parent = label
-    
-    label.Parent = MainFrame
+    UIStroke.Color = Color3.new(0,0,0)
     return label
 end
 
---// CÁC DÒNG HIỂN THỊ
-local UserLabel = createLabel('UserLabel', LocalPlayer.Name:upper(), Color3.new(1, 1, 1), 1)
+local UserLabel = createLabel('UserLabel', Player.Name:upper(), Color3.new(1, 1, 1), 1)
 local TimeLabel = createLabel('TimeLabel', 'TIME: 00:00:00', Color3.fromRGB(200, 200, 200), 2)
 local FPSLabel = createLabel('FPSLabel', 'FPS: 0', Color3.fromRGB(255, 180, 0), 3)
 local ClicksLabel = createLabel('ClicksLabel', 'CLICKS: 0', Color3.fromRGB(0, 255, 255), 4)
 local EggsLabel = createLabel('EggsLabel', 'EGGS: 0', Color3.fromRGB(255, 255, 0), 5)
-local EggsMinLabel = createLabel('EggsMinLabel', 'EGGS/MIN: 0', Color3.fromRGB(255, 150, 0), 6) -- New Label
+local EggsMinLabel = createLabel('EggsMinLabel', 'EGGS/MIN: 0', Color3.fromRGB(255, 150, 0), 6)
 local RarestLabel = createLabel('RarestLabel', 'RAREST: 0', Color3.fromRGB(255, 0, 255), 7)
 local RebirthsLabel = createLabel('RebirthsLabel', 'REBIRTHS: 0', Color3.fromRGB(0, 255, 0), 8)
 
---// LOGIC EGGS PER MINUTE
-local eggHistory = {} -- Lưu trữ thời gian mỗi khi nhận trứng
-
-local function updateEggsPerMin()
-    local now = tick()
-    -- Xóa các bản ghi cũ hơn 60 giây
-    for i = #eggHistory, 1, -1 do
-        if now - eggHistory[i] > 60 then
-            table.remove(eggHistory, i)
-        end
-    end
-    EggsMinLabel.Text = "EGGS/MIN: " .. #eggHistory
-end
-
---// Tìm đoạn local function updateLeaderstats và thay thế bằng đoạn này:
-
-local initialEggs = nil -- Biến lưu số trứng ban đầu
+--// LOGIC TÍNH TOÁN
+local startTime = os.time()
+local initialEggs = nil
+local totalEggsGained = 0
 
 local function updateLeaderstats()
-    local leaderstats = LocalPlayer:WaitForChild("leaderstats", 20)
-    if leaderstats then
-        local function setupStat(statName, label, prefix)
-            local stat = leaderstats:FindFirstChild(statName)
-            if stat then
-                -- Thiết lập giá trị ban đầu cho Eggs
-                if statName == "Eggs" and initialEggs == nil then
-                    initialEggs = stat.Value
-                end
+    local leaderstats = Player:WaitForChild("leaderstats", 20)
+    if not leaderstats then return end
 
-                -- Hàm cập nhật hiển thị chữ
-                local function refreshText()
-                    if statName == "Eggs" then
-                        local gained = stat.Value - initialEggs
-                        label.Text = string.format("EGGS: %d (+%d)", stat.Value, gained)
-                    else
-                        label.Text = prefix .. ": " .. tostring(stat.Value)
-                    end
-                end
+    local function setupStat(statName, label, prefix)
+        local stat = leaderstats:FindFirstChild(statName)
+        if not stat then return end
 
-                refreshText() -- Chạy lần đầu
-                
-                stat:GetPropertyChangedSignal("Value"):Connect(function()
-                    if statName == "Eggs" then
-                        table.insert(eggHistory, tick())
-                    end
-                    refreshText()
-                end)
-            end
+        if statName == "Eggs" and initialEggs == nil then
+            initialEggs = stat.Value
         end
+
+        stat:GetPropertyChangedSignal("Value"):Connect(function()
+            if statName == "Eggs" then
+                -- Tính tổng trứng thực tế đã nhận (bao gồm cả +232 mỗi lần)
+                totalEggsGained = stat.Value - (initialEggs or stat.Value)
+                label.Text = "EGGS: " .. tostring(stat.Value) .. " (+" .. tostring(totalEggsGained) .. ")"
+            elseif statName == "Rarest" then
+                label.Text = "RAREST: " .. tostring(stat.Value)
+            else
+                label.Text = prefix .. ": " .. tostring(stat.Value)
+            end
+        end)
         
-        setupStat("Clicks", ClicksLabel, "CLICKS")
-        setupStat("Eggs", EggsLabel, "EGGS")
-        setupStat("Rarest", RarestLabel, "RAREST")
-        setupStat("Rebirths", RebirthsLabel, "REBIRTHS")
+        -- Cập nhật lần đầu
+        if statName == "Eggs" then
+            label.Text = "EGGS: " .. tostring(stat.Value) .. " (+0)"
+        elseif statName == "Rarest" then
+            label.Text = "RAREST: " .. tostring(stat.Value)
+        else
+            label.Text = prefix .. ": " .. tostring(stat.Value)
+        end
     end
+
+    setupStat("Clicks", ClicksLabel, "CLICKS")
+    setupStat("Eggs", EggsLabel, "EGGS")
+    setupStat("Rarest", RarestLabel, "RAREST")
+    setupStat("Rebirths", RebirthsLabel, "REBIRTHS")
 end
+
 task.spawn(updateLeaderstats)
 
---// LOGIC FPS, TIME & EPM LOOP
-local startTime = os.time()
+--// VÒNG LẶP CẬP NHẬT FPS, TIME & EPM
 local lastUpdate = tick()
 local frames = 0
-RunService.RenderStepped:Connect(function()
+game:GetService("RunService").RenderStepped:Connect(function()
     frames = frames + 1
     local now = tick()
     
+    -- Cập nhật FPS và EGGS/MIN mỗi giây
     if now - lastUpdate >= 1 then
         FPSLabel.Text = "FPS: " .. tostring(frames)
+        
+        local elapsed = os.time() - startTime
+        if elapsed > 0 then
+            -- Công thức: (Tổng trứng nhận được / Số giây đã trôi qua) * 60 giây
+            local epm = math.floor((totalEggsGained / elapsed) * 60)
+            EggsMinLabel.Text = "EGGS/MIN: " .. tostring(epm)
+        end
+        
         frames = 0
         lastUpdate = now
-        updateEggsPerMin() -- Cập nhật Eggs/Min mỗi giây
     end
     
     local elapsed = os.time() - startTime
@@ -749,14 +809,16 @@ RunService.RenderStepped:Connect(function()
     local secs = elapsed % 60
     TimeLabel.Text = string.format('TIME: %02d:%02d:%02d', hours, mins, secs)
 end)
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
--- Vòng lặp nhấn phím P liên tục
-while true do
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.P, false, game)
-    task.wait(0.1) -- Tốc độ nhấn (0.1 giây)
-    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.P, false, game)
-    task.wait(50)
-end
+--// AUTO CLICK PHÍM P
+task.spawn(function()
+    local VIM = game:GetService("VirtualInputManager")
+    while true do
+        VIM:SendKeyEvent(true, Enum.KeyCode.P, false, game)
+        task.wait(0.1)
+        VIM:SendKeyEvent(false, Enum.KeyCode.P, false, game)
+        task.wait(50)
+    end
+end)
 ----------------
 --end
