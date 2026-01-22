@@ -144,6 +144,15 @@ local function SmartCleanInventory()
     end
 end
 
+if _G.AutoHatch == true then
+    task.spawn(function()
+        while true do
+            pcall(SmartCleanInventory)
+            task.wait(1) -- Chạy mỗi 5 phút
+        end
+    end)
+end
+
 local function RunAutoEgg()
     local EggDatabase = require(ReplicatedStorage.Game.Eggs) -- 
     
