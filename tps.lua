@@ -1,4 +1,4 @@
-
+_G.AutoTap = true
 _G.AutoRebirthMax = true
 _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
@@ -10,6 +10,9 @@ _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
         "Luck",
+        "Tap",
+        "Gem",
+        "Rebirth",
         "Taco",
         "Octo"
     }
@@ -51,7 +54,7 @@ local EggDatabase = require(ReplicatedStorage.Game.Eggs)
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 
-_G.TapsPerSecond = 500
+_G.TapsPerSecond = 777
 _G.IsRebirthing = false -- Cầu chì ngắt các luồng khác khi đang Rebirth
 local RunService = game:GetService("RunService")
 local tapAcc = 0
@@ -157,8 +160,8 @@ local function SmartCleanInventory()
 end
 task.spawn(function()
     while true do
-        -- Kiểm tra điều kiện bên trong vòng lặp
         if type(_G.AutoHatch) == "table" and _G.AutoHatch.Enabled == true then
+            Network:InvokeServer("EquipBest")
             local success, err = pcall(SmartCleanInventory)
             if not success then
                 warn("Lỗi SmartCleanInventory: " .. tostring(err))
@@ -167,22 +170,25 @@ task.spawn(function()
             task.wait(1) 
     end
 end)
+-- [[ CONFIG CỐ ĐỊNH ]]
+local MoneyNeeded = 1000000000000 -- Ngưỡng 1 Trình (1T) để đổi chế độ mở trứng
 
 local function GetTargetEgg()
     local stats = Replication.Data and Replication.Data.Statistics
     if not stats then return nil end
     
     local currentClicks = stats["Clicks"] or 0
-    local ONE_TRILLION = 1000000000000
 
-    -- 1. Nếu đạt mốc 1 Trình (1T) Clicks
-    if currentClicks >= ONE_TRILLION then
+    -- 1. Nếu đủ tiền ngưỡng MoneyNeeded (1T) -> Ưu tiên trứng chỉ định hoặc trứng Lightning
+    if currentClicks >= MoneyNeeded then
+        -- Ưu tiên 1: Trứng trong Config _G
         for targetName, isEnabled in pairs(_G.AutoHatch["Egg"]) do
             if isEnabled and EggDatabase[targetName] then
                 return targetName
             end
         end
         
+        -- Ưu tiên 2: Tìm trứng có tên "Lightning" (Trứng Event)
         for eggName, _ in pairs(EggDatabase) do
             if string.find(string.lower(eggName), "lightning") then
                 return eggName
@@ -190,7 +196,7 @@ local function GetTargetEgg()
         end
     end
 
-    -- 2. Nếu chưa đủ 1T -> Tìm Best Egg
+    -- 2. Nếu chưa đủ MoneyNeeded (Hoặc không tìm thấy trứng Lightning) -> Tìm Best Egg theo túi tiền
     local bestEgg = nil
     local maxPrice = -1
 
@@ -214,30 +220,66 @@ end
 local function RunAutoEgg()
     if type(_G.AutoHatch) ~= "table" or not _G.AutoHatch["Enabled"] then return end
     
-    task.spawn(function()
-        
+    task.spawn(function()        
         while type(_G.AutoHatch) == "table" and _G.AutoHatch["Enabled"] do
-            local target = GetTargetEgg()
-            
-            if target then
-                -- KIỂM TRA BOOST OCTO HATCH
-                local hatchAmount = 3 -- Mặc định mở 3 trứng
-                local activeBoosts = Replication.Data and Replication.Data.ActiveBoosts
+            local data = Replication.Data
+            if not data or not data.Statistics then task.wait(1) continue end
 
-                -- Nếu loại 'Octo Incubator' đang hoạt động và chưa hết hạn
-                if activeBoosts and activeBoosts["Octo Incubator"] and activeBoosts["Octo Incubator"] > 0 then
-                    hatchAmount = 8
+            local currentClicks = data.Statistics.Clicks or 0
+            local target = GetTargetEgg()
+
+            if target then
+                -------------------------------------------------------
+                -- [ PHẦN 1: CHẶN TIÊU TIỀN KHI SẮP REBIRTH ]
+                -------------------------------------------------------
+                if _G.AutoRebirthMax then
+                    local rawMaxIdx = (type(data.RebirthOptions) == "table" and #data.RebirthOptions) or (tonumber(data.RebirthOptions) or 0)
+                    local maxIdx = math.min(rawMaxIdx, 23) 
+
+                    if maxIdx > 0 then
+                        local rbAmount = Rebirths:fromIndex(maxIdx)
+                        local finalPrice = Rebirths:ClicksPrice(Rebirths:getPrice(rbAmount), data.Statistics.Rebirths)
+                        
+                        -- Chặn tiêu tiền nếu đạt 85% giá Rebirth
+                        if currentClicks >= (finalPrice * 0.85) and currentClicks < finalPrice then
+                            task.wait(0.5) 
+                            continue 
+                        end
+                    end
                 end
 
+                -------------------------------------------------------
+                -- [ PHẦN 2: CHẾ ĐỘ MỞ TRỨNG (DỰA TRÊN MoneyNeeded) ]
+                -------------------------------------------------------
+                local hatchAmount = 1 -- Mặc định mở 1 quả (Dưới ngưỡng MoneyNeeded)
+
+                if currentClicks >= MoneyNeeded then
+                    hatchAmount = 3 -- Đạt ngưỡng thì mở 3
+                    
+                    -- Nâng cấp lên 8 nếu có Boost hoặc Gamepass
+                    local activeBoosts = data.ActiveBoosts
+                    local hasOctoPass = data.Gamepasses and data.Gamepasses["OctoHatch"]
+                    
+                    if (activeBoosts and activeBoosts["Octo Incubator"] and activeBoosts["Octo Incubator"] > 0) or hasOctoPass then
+                        hatchAmount = 8
+                    end
+                end
+
+                -------------------------------------------------------
+                -- [ PHẦN 3: TRIỂN KHAI ]
+                -------------------------------------------------------
                 pcall(function()
-                    -- Sử dụng biến hatchAmount (3 hoặc 8)
                     Network:InvokeServer("OpenEgg", target, hatchAmount, {})
                 end)
             end
             
-            task.wait(0.1)
+            -- Tối ưu tốc độ vòng lặp
+            if currentClicks < MoneyNeeded then
+                task.wait(0.6) -- Nghèo thì mở chậm cho đỡ tốn
+            else
+                task.wait(0.1) -- Giàu thì spam nhanh
+            end
         end
-        
     end)
 end
 
@@ -333,7 +375,7 @@ local function AutoOpenBestPortal()
                 
                 if success then
                     print("✅ Đã mở khóa thành công portal: " .. portal.Name)
-                    -- Nếu thất bại thường là do chưa mở cổng trước đó
+                else
                     print("❌ Không thể mua " .. portal.Name .. ". Có thể do chưa mở cổng trước đó.")
                 end
                 -- Sau khi thử mua 1 cổng thì dừng lại để chờ chu kỳ sau
@@ -579,13 +621,6 @@ for _, item in ipairs(workspace:GetDescendants()) do
     end
 end
 
-local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-
-for _, gui in ipairs(playerGui:GetChildren()) do
-    if gui:IsA("ScreenGui") then
-        gui.Enabled = false
-    end
-end
 
 task.spawn(function()
     while _G.AutoElectricSpin do
