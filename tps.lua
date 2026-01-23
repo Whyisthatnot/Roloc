@@ -1,5 +1,5 @@
 setfpscap(5)
-_G.AutoTap = true
+_G.AutoTap = false
 _G.AutoRebirthMax = true
 _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
