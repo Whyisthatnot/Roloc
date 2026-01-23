@@ -1,4 +1,4 @@
-_G.AutoTap = true
+_G.AutoTap = false
 _G.AutoRebirthMax = false
 _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
