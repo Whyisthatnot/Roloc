@@ -1,6 +1,6 @@
 setfpscap(5)
 _G.AutoTap = false
-_G.AutoRebirthMax = true
+_G.AutoRebirthMax = false
 _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
 _G.AutoUpgrade = true
@@ -169,112 +169,83 @@ task.spawn(function()
     end
 end)
 -- [[ CONFIG CỐ ĐỊNH ]]
-local MoneyNeeded = 1000000000000 -- Ngưỡng 1 Trình (1T) để đổi chế độ mở trứng
+local MoneyNeeded = 1000000000000 
 
 local function GetTargetEgg()
     local stats = Replication.Data and Replication.Data.Statistics
     if not stats then return nil end
-    
     local currentClicks = stats["Clicks"] or 0
 
-    -- 1. Nếu đủ tiền ngưỡng MoneyNeeded (1T) -> Ưu tiên trứng chỉ định hoặc trứng Lightning
+    -- Nếu đủ tiền MoneyNeeded -> Ưu tiên trứng chỉ định hoặc trứng Lightning
     if currentClicks >= MoneyNeeded then
-        -- Ưu tiên 1: Trứng trong Config _G
         for targetName, isEnabled in pairs(_G.AutoHatch["Egg"]) do
-            if isEnabled and EggDatabase[targetName] then
-                return targetName
-            end
+            if isEnabled and EggDatabase[targetName] then return targetName end
         end
-        
-        -- Ưu tiên 2: Tìm trứng có tên "Lightning" (Trứng Event)
         for eggName, _ in pairs(EggDatabase) do
-            if string.find(string.lower(eggName), "lightning") then
-                return eggName
-            end
+            if string.find(string.lower(eggName), "lightning") then return eggName end
         end
     end
 
-    -- 2. Nếu chưa đủ MoneyNeeded (Hoặc không tìm thấy trứng Lightning) -> Tìm Best Egg theo túi tiền
-    local bestEgg = nil
-    local maxPrice = -1
-
+    -- Nếu chưa đủ -> Tìm Best Egg theo túi tiền
+    local bestEgg, maxPrice = nil, -1
     for eggName, eggData in pairs(EggDatabase) do
-        if type(eggData) == "table" and eggData.Price then
-            local price = eggData.Price
-            local currency = eggData.Currency or "Clicks"
-            
-            if currency == "Clicks" and price <= currentClicks then
-                if price > maxPrice then
-                    maxPrice = price
-                    bestEgg = eggName
-                end
+        if type(eggData) == "table" and eggData.Price and (eggData.Currency or "Clicks") == "Clicks" then
+            if eggData.Price <= currentClicks and eggData.Price > maxPrice then
+                maxPrice, bestEgg = eggData.Price, eggName
             end
         end
     end
-    
     return bestEgg
 end
+
 local function RunAutoEgg()
     if type(_G.AutoHatch) ~= "table" or not _G.AutoHatch["Enabled"] then return end
     
     task.spawn(function()        
-        while type(_G.AutoHatch) == "table" and _G.AutoHatch["Enabled"] do
+        while _G.AutoHatch and _G.AutoHatch["Enabled"] do
             local data = Replication.Data
-            if not data or not data.Statistics then task.wait(1) continue end
+            if not data or not data.Statistics then task.wait(0.5) continue end
 
             local currentClicks = data.Statistics.Clicks or 0
             local target = GetTargetEgg()
 
             if target then
                 -------------------------------------------------------
-                -- [ PHẦN 1: CHẶN TIÊU TIỀN KHI SẮP REBIRTH ]
+                -- [ CHẾ ĐỘ MỞ TRỨNG - KHÔNG CÒN CHẶN REBIRTH ]
                 -------------------------------------------------------
-                if _G.AutoRebirthMax then
-                    local rawMaxIdx = (type(data.RebirthOptions) == "table" and #data.RebirthOptions) or (tonumber(data.RebirthOptions) or 0)
-                    local maxIdx = math.min(rawMaxIdx, 23) 
-
-                    if maxIdx > 0 then
-                        local rbAmount = Rebirths:fromIndex(maxIdx)
-                        local finalPrice = Rebirths:ClicksPrice(Rebirths:getPrice(rbAmount), data.Statistics.Rebirths)
-                        
-                        if currentClicks >= (finalPrice * 0.85) and currentClicks < finalPrice then
-                            task.wait() 
-                            continue 
-                        end
-                    end
-                end
-
-                -------------------------------------------------------
-                -- [ PHẦN 2: CHẾ ĐỘ MỞ TRỨNG (CHECK GAMEPASS x8Egg) ]
-                -------------------------------------------------------
-                local hatchAmount = 1 -- Mặc định dưới ngưỡng mở 1
-
+                local hatchAmount = 1
+                
                 if currentClicks >= MoneyNeeded then
-                    -- Kiểm tra Gamepass x8Egg hoặc Boost Octo
-                    local hasX8Pass = data.Gamepasses and data.Gamepasses["x8Egg"]
-                    local hasOctoBoost = data.ActiveBoosts and data.ActiveBoosts["Octo Incubator"] and data.ActiveBoosts["Octo Incubator"] > 0
-                    
-                    if hasX8Pass or hasOctoBoost then
+                    -- Kiểm tra Pass x8Egg hoặc Octo Boost để mở 8
+                    if (data.Gamepasses and data.Gamepasses["x8Egg"]) or 
+                       (data.ActiveBoosts and data.ActiveBoosts["Octo Incubator"] and data.ActiveBoosts["Octo Incubator"] > 0) then
                         hatchAmount = 8
                     else
-                        hatchAmount = 3 -- Nếu không có pass x8 thì mở 3 như bình thường
+                        hatchAmount = 3
                     end
                 end
 
                 -------------------------------------------------------
-                -- [ PHẦN 3: TRIỂN KHAI ]
+                -- [ BẮN LỆNH ASYNC - TỐI ƯU CHO LOW FPS ]
                 -------------------------------------------------------
-                pcall(function()
+                task.spawn(function()
                     Network:InvokeServer("OpenEgg", target, hatchAmount, {})
                 end)
-            task.wait()
+
+                -- Tốc độ vòng lặp cực nhanh khi giàu, ổn định khi nghèo
+                if currentClicks >= MoneyNeeded then
+                    task.wait() -- Gần như không chờ, bắn lệnh liên tục
+                else
+                    task.wait() -- Tốc độ tiêu chuẩn khi chưa đạt 1T
+                end
+            else
+                task.wait() -- Nghỉ nếu không đủ tiền mua bất cứ trứng nào
             end
         end
     end)
 end
 
 RunAutoEgg()
-
 
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 3: LOGIC REBIRTH, WORLD & QUEST ]]
