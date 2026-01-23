@@ -1,4 +1,4 @@
-setfpscap(20)
+setfpscap(5)
 _G.AutoTap = false
 _G.AutoRebirthMax = false
 _G.AutoCollectQuest = true
@@ -694,7 +694,7 @@ ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
 local Background = Instance.new('Frame', ScreenGui)
 Background.Size = UDim2.new(1, 0, 1, 0) 
 Background.BackgroundColor3 = Color3.new(0, 0, 0) 
-Background.BackgroundTransparency = 0.5 
+Background.BackgroundTransparency = 0
 Background.BorderSizePixel = 0
 
 local MainFrame = Instance.new('Frame', Background)
