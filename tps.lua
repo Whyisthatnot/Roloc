@@ -35,6 +35,7 @@ _G.AutoRainbow = {
 }
 
 -- [[ SERVICES & MODULES ]]
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Network = require(ReplicatedStorage.Modules.Network)
@@ -47,11 +48,49 @@ local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
 local GemShopData = require(game:GetService("ReplicatedStorage").Game.GemShop)
 local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
 local EggDatabase = require(ReplicatedStorage.Game.Eggs)
+local CollectionService = game:GetService("CollectionService")
+local PortalsDB = require(ReplicatedStorage.Game.Portals) -- Database chứa Index đảo
+local player = Players.LocalPlayer
 
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
+local function TeleportBestIsland()
+    local data = Replication.Data
+    if not data or not data.Portals then return end
 
+    -- 1. Tìm tên đảo có Index cao nhất trong Database
+    local bestName, maxIdx = "", -1
+    for name, info in pairs(PortalsDB) do
+        if data.Portals[name] and (info.Index or 0) > maxIdx then
+            maxIdx, bestName = info.Index, name
+        end
+    end
+
+    -- 2. Tìm Part và bay tới (CFrame)
+    if bestName ~= "" and bestName ~= lastBestIsland then
+        for _, part in ipairs(CollectionService:GetTagged("IslandPart")) do
+            if part.Name == bestName then
+                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    lastBestIsland = bestName
+                    root.Anchored = true
+                    root.CFrame = CFrame.new(part.Position + Vector3.new(0, 30, 0))
+                    task.wait(1.5)
+                    root.Anchored = false
+                end
+                break
+            end
+        end
+    end
+end
+
+-- Cách dùng: Cho vào vòng lặp
+task.spawn(function()
+    while task.wait(5) do
+        TeleportBestIsland()
+    end
+end)
 _G.TapsPerSecond = 555
 _G.IsRebirthing = false -- Cầu chì ngắt các luồng khác khi đang Rebirth
 local RunService = game:GetService("RunService")
@@ -124,7 +163,7 @@ local function SmartCleanInventory()
 
     -- Gom ID cần xóa
     local idsToDelete = {}
-    local MAX_KEEP = 50 -- Chỉ giữ 30 con mạnh nhất
+    local MAX_KEEP = 30 -- Chỉ giữ 30 con mạnh nhất
 
     for i, pet in ipairs(allPets) do
         if i > MAX_KEEP then
