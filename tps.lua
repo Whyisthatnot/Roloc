@@ -213,7 +213,6 @@ local function GetTargetEgg()
     
     return bestEgg
 end
-
 local function RunAutoEgg()
     if type(_G.AutoHatch) ~= "table" or not _G.AutoHatch["Enabled"] then return end
     
@@ -237,7 +236,6 @@ local function RunAutoEgg()
                         local rbAmount = Rebirths:fromIndex(maxIdx)
                         local finalPrice = Rebirths:ClicksPrice(Rebirths:getPrice(rbAmount), data.Statistics.Rebirths)
                         
-                        -- Chặn tiêu tiền nếu đạt 85% giá Rebirth
                         if currentClicks >= (finalPrice * 0.85) and currentClicks < finalPrice then
                             task.wait(0.5) 
                             continue 
@@ -246,19 +244,19 @@ local function RunAutoEgg()
                 end
 
                 -------------------------------------------------------
-                -- [ PHẦN 2: CHẾ ĐỘ MỞ TRỨNG (DỰA TRÊN MoneyNeeded) ]
+                -- [ PHẦN 2: CHẾ ĐỘ MỞ TRỨNG (CHECK GAMEPASS x8Egg) ]
                 -------------------------------------------------------
-                local hatchAmount = 1 -- Mặc định mở 1 quả (Dưới ngưỡng MoneyNeeded)
+                local hatchAmount = 1 -- Mặc định dưới ngưỡng mở 1
 
                 if currentClicks >= MoneyNeeded then
-                    hatchAmount = 3 -- Đạt ngưỡng thì mở 3
+                    -- Kiểm tra Gamepass x8Egg hoặc Boost Octo
+                    local hasX8Pass = data.Gamepasses and data.Gamepasses["x8Egg"]
+                    local hasOctoBoost = data.ActiveBoosts and data.ActiveBoosts["Octo Incubator"] and data.ActiveBoosts["Octo Incubator"] > 0
                     
-                    -- Nâng cấp lên 8 nếu có Boost hoặc Gamepass
-                    local activeBoosts = data.ActiveBoosts
-                    local hasOctoPass = data.Gamepasses and data.Gamepasses["OctoHatch"]
-                    
-                    if (activeBoosts and activeBoosts["Octo Incubator"] and activeBoosts["Octo Incubator"] > 0) or hasOctoPass then
+                    if hasX8Pass or hasOctoBoost then
                         hatchAmount = 8
+                    else
+                        hatchAmount = 3 -- Nếu không có pass x8 thì mở 3 như bình thường
                     end
                 end
 
@@ -272,9 +270,9 @@ local function RunAutoEgg()
             
             -- Tối ưu tốc độ vòng lặp
             if currentClicks < MoneyNeeded then
-                task.wait(0.6) -- Nghèo thì mở chậm cho đỡ tốn
+                task.wait(0.6) 
             else
-                task.wait(0.1) -- Giàu thì spam nhanh
+                task.wait(0.1) 
             end
         end
     end)
