@@ -55,40 +55,60 @@ local player = Players.LocalPlayer
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
-local function TeleportBestIsland()
-    local data = Replication.Data
-    if not data or not data.Portals then return end
 
-    -- 1. Tìm tên đảo có Index cao nhất trong Database
-    local bestName, maxIdx = "", -1
-    for name, info in pairs(PortalsDB) do
-        if data.Portals[name] and (info.Index or 0) > maxIdx then
-            maxIdx, bestName = info.Index, name
-        end
+local function teleportToBestIslandSafe()
+    local player = Players.LocalPlayer
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local rootPart = character.HumanoidRootPart
+    local data = Replication.Data
+    
+    if not data or not data.Portals then 
+        warn("Dữ liệu game chưa load!")
+        return 
     end
 
-    -- 2. Tìm Part và bay tới (CFrame)
-    if bestName ~= "" and bestName ~= lastBestIsland then
-        for _, part in ipairs(CollectionService:GetTagged("IslandPart")) do
-            if part.Name == bestName then
-                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    lastBestIsland = bestName
-                    root.Anchored = true
-                    root.CFrame = CFrame.new(part.Position + Vector3.new(0, 30, 0))
-                    task.wait(1.5)
-                    root.Anchored = false
-                end
-                break
+    local bestIslandPart = nil
+    local maxDistance = -1
+    local unlockedIslands = data.Portals
+
+    -- Tìm đảo mạnh nhất đã mở khóa
+    for _, part in ipairs(CollectionService:GetTagged("IslandPart")) do
+        if unlockedIslands[part.Name] then
+            local dist = part.Position.Magnitude
+            if dist > maxDistance then
+                maxDistance = dist
+                bestIslandPart = part
             end
         end
     end
+
+    if bestIslandPart then
+        -- Chống văng và giữ đứng im
+        rootPart.Velocity = Vector3.zero
+        
+        -- Dịch chuyển lên cao 25 block để an toàn tuyệt đối
+        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 25, 0))
+        
+        -- Khóa nhân vật lại trên không
+        rootPart.Anchored = true
+        
+        -- Đợi 1 giây để map load
+        task.wait(1)
+        
+        -- Thả nhân vật ra
+    else
+        warn("Không tìm thấy đảo nào hợp lệ!")
+    end
 end
 
+-- Thực thi
 -- Cách dùng: Cho vào vòng lặp
 task.spawn(function()
-    while task.wait(5) do
-        TeleportBestIsland()
+    while true do
+        teleportToBestIslandSafe()
+        task.wait(5)
     end
 end)
 _G.TapsPerSecond = 555
