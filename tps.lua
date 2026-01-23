@@ -1,6 +1,6 @@
 setfpscap(5)
-_G.AutoTap = false
-_G.AutoRebirthMax = false
+_G.AutoTap = true
+_G.AutoRebirthMax = true
 _G.AutoCollectQuest = true
 _G.AutoBuyWorld = true
 _G.AutoUpgrade = true
@@ -52,7 +52,7 @@ local EggDatabase = require(ReplicatedStorage.Game.Eggs)
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 
-_G.TapsPerSecond = 20
+_G.TapsPerSecond = 555
 _G.IsRebirthing = false -- Cầu chì ngắt các luồng khác khi đang Rebirth
 local RunService = game:GetService("RunService")
 local tapAcc = 0
@@ -74,43 +74,33 @@ RunService.Heartbeat:Connect(function(dt)
         tapAcc = 0 
     end
 end)
-
 local function SmartCleanInventory()
     local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
     local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
-    local PetStats = require(game:GetService("ReplicatedStorage").Game.PetStats)
+    local PetStats = require(game:GetService("ReplicatedStorage").Game.Eggs) -- Dùng database trứng/pet
 
     local inventory = Replication.Data.Pets
     if not inventory then return end
 
-    -- 1. Bảng ưu tiên Độ hiếm (Càng cao càng quan trọng)
     local RarityPriority = {
-        ["Mythical"] = 5,
-        ["Legendary"] = 4,
-        ["Epic"] = 3,
-        ["Rare"] = 2,
-        ["Uncommon"] = 1,
-        ["Common"] = 0
+        ["Mythical"] = 5, ["Legendary"] = 4, ["Epic"] = 3, 
+        ["Rare"] = 2, ["Uncommon"] = 1, ["Common"] = 0
     }
 
-    -- 2. Bảng ưu tiên Bậc (Tier)
     local TierPriority = {
-        ["Rainbow"] = 3,
-        ["Golden"] = 2,
-        ["Normal"] = 1
+        ["Void"] = 4, ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
     }
 
-    -- Các loại cực hiếm thì không bao giờ đưa vào danh sách xóa
     local SafeRarities = {
         ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, 
-        ["Godly"] = true, ["Leaderboard"] = true,
+        ["Godly"] = true, ["Divine"] = true, ["Celestial"] = true, ["Exotic"] = true
     }
     
     local allPets = {}
     
     for id, data in pairs(inventory) do
-        local stats = PetStats:GetStats(data.Name)
-        local rarity = stats and stats.Rarity or "Common"
+        -- Lấy rarity từ database nếu data.Rarity không có sẵn
+        local rarity = data.Rarity or "Common"
         local tier = data.Tier or "Normal"
         
         if data.Equipped or data.Locked or SafeRarities[rarity] then
@@ -119,64 +109,83 @@ local function SmartCleanInventory()
 
         table.insert(allPets, {
             id = id,
-            rarityLevel = RarityPriority[rarity] or 0, -- Điểm độ hiếm
-            tierLevel = TierPriority[tier] or 0        -- Điểm bậc
+            rarityLevel = RarityPriority[rarity] or 0,
+            tierLevel = TierPriority[tier] or 0
         })
     end
 
-    -- 3. Sắp xếp đa tầng:
+    -- Sắp xếp: Con mạnh lên đầu
     table.sort(allPets, function(a, b) 
-        -- Nếu độ hiếm khác nhau, con nào hiếm hơn (Mythical > Legendary) đứng trước
         if a.rarityLevel ~= b.rarityLevel then
             return a.rarityLevel > b.rarityLevel
         end
-        -- Nếu cùng độ hiếm, con nào bậc cao hơn (Rainbow > Golden) đứng trước
         return a.tierLevel > b.tierLevel 
     end)
 
-    -- 4. Xác định danh sách xóa
+    -- Gom ID cần xóa
     local idsToDelete = {}
-    local MAX_KEEP = 80 -- Giữ lại 80 con tốt nhất
+    local MAX_KEEP = 30 -- Chỉ giữ 30 con mạnh nhất
 
     for i, pet in ipairs(allPets) do
-        -- Những con nằm ngoài top 80 sau khi đã sắp xếp theo độ hiếm + bậc sẽ bị xóa
         if i > MAX_KEEP then
             table.insert(idsToDelete, pet.id)
         end
     end
 
-    -- 5. Thực thi xóa
+    -- THỰC THI XÓA HÀNG LOẠT (BULK DELETE)
     if #idsToDelete > 0 then
-        for _, petId in pairs(idsToDelete) do
-            local currentPet = Replication.Data.Pets[petId]
-            if currentPet and not currentPet.Equipped then
-                Network:InvokeServer("DeletePet", petId)
-                task.wait(0.05) -- Để 0.05 cho an toàn, tránh bị lag/kick
-            end
+        
+        -- Thử nghiệm gửi cả bảng ID (Cách nhanh nhất)
+        local success = Network:InvokeServer("DeletePet", idsToDelete)
+        
+        -- Nếu Server không hỗ trợ gửi cả bảng (vẫn in báo lỗi), 
+        -- nó sẽ tự động dùng vòng lặp siêu tốc không wait
+        if not success then
+             for _, petId in pairs(idsToDelete) do
+                task.spawn(function() 
+                    Network:InvokeServer("DeletePet", petId) 
+                end)
+             end
         end
     end
 end
+
+-- Vòng lặp chạy mỗi 10 giây (nhanh hơn để tránh full kho)
 task.spawn(function()
     while true do
-        if type(_G.AutoHatch) == "table" and _G.AutoHatch.Enabled == true then
+        pcall(function()
+            local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
             Network:InvokeServer("EquipBest")
-            local success, err = pcall(SmartCleanInventory)
-            if not success then
-                warn("Lỗi SmartCleanInventory: " .. tostring(err))
-            end
-        end
-            task.wait(1) 
+            task.wait(0.5)
+            SmartCleanInventory()
+        end)
+        task.wait()
     end
 end)
 -- [[ CONFIG CỐ ĐỊNH ]]
-local MoneyNeeded = 1000000000000 
+local MoneyNeeded = 1000000000000 -- 1 Trillion
 
+-- [[ 1. HOOK BYPASS BYPASS DELAY SERVER ]]
+local oldInvoke = Network.InvokeServer
+Network.InvokeServer = function(self, method, ...)
+    local args = {...}
+    if method == "OpenEgg" then
+        task.spawn(function()
+            pcall(function()
+                return oldInvoke(self, method, unpack(args))
+            end)
+        end)
+        return true 
+    end
+    return oldInvoke(self, method, ...)
+end
+
+-- [[ 2. HÀM TỰ ĐỘNG CHỌN TRỨNG THÔNG MINH ]]
 local function GetTargetEgg()
-    local stats = Replication.Data and Replication.Data.Statistics
-    if not stats then return nil end
-    local currentClicks = stats["Clicks"] or 0
+    local data = Replication.Data
+    if not data or not data.Statistics then return nil end
+    local currentClicks = data.Statistics.Clicks or 0
 
-    -- Nếu đủ tiền MoneyNeeded -> Ưu tiên trứng chỉ định hoặc trứng Lightning
     if currentClicks >= MoneyNeeded then
         for targetName, isEnabled in pairs(_G.AutoHatch["Egg"]) do
             if isEnabled and EggDatabase[targetName] then return targetName end
@@ -186,7 +195,6 @@ local function GetTargetEgg()
         end
     end
 
-    -- Nếu chưa đủ -> Tìm Best Egg theo túi tiền
     local bestEgg, maxPrice = nil, -1
     for eggName, eggData in pairs(EggDatabase) do
         if type(eggData) == "table" and eggData.Price and (eggData.Currency or "Clicks") == "Clicks" then
@@ -198,55 +206,34 @@ local function GetTargetEgg()
     return bestEgg
 end
 
-local function RunAutoEgg()
-    if type(_G.AutoHatch) ~= "table" or not _G.AutoHatch["Enabled"] then return end
-    
-    task.spawn(function()        
-        while _G.AutoHatch and _G.AutoHatch["Enabled"] do
-            local data = Replication.Data
-            if not data or not data.Statistics then task.wait(0.5) continue end
+-- [[ 3. VÒNG LẶP CHÍNH ]]
+print("🚀 AUTO EGG STARTED - BYPASS ENABLED")
 
-            local currentClicks = data.Statistics.Clicks or 0
+task.spawn(function()
+    while _G.AutoHatch["Enabled"] do
+        local data = Replication.Data
+        if data and data.Statistics then
             local target = GetTargetEgg()
-
+            local currentClicks = data.Statistics.Clicks or 0
+            
             if target then
-                -------------------------------------------------------
-                -- [ CHẾ ĐỘ MỞ TRỨNG - KHÔNG CÒN CHẶN REBIRTH ]
-                -------------------------------------------------------
                 local hatchAmount = 1
-                
                 if currentClicks >= MoneyNeeded then
-                    -- Kiểm tra Pass x8Egg hoặc Octo Boost để mở 8
                     if (data.Gamepasses and data.Gamepasses["x8Egg"]) or 
                        (data.ActiveBoosts and data.ActiveBoosts["Octo Incubator"] and data.ActiveBoosts["Octo Incubator"] > 0) then
                         hatchAmount = 8
-                        setfpscap(20)
                     else
                         hatchAmount = 3
                     end
                 end
-
-                -------------------------------------------------------
-                -- [ BẮN LỆNH ASYNC - TỐI ƯU CHO LOW FPS ]
-                -------------------------------------------------------
-                task.spawn(function()
-                    Network:InvokeServer("OpenEgg", target, hatchAmount, {})
-                end)
-
-                -- Tốc độ vòng lặp cực nhanh khi giàu, ổn định khi nghèo
-                if currentClicks >= MoneyNeeded then
-                    task.wait() -- Gần như không chờ, bắn lệnh liên tục
-                else
-                    task.wait() -- Tốc độ tiêu chuẩn khi chưa đạt 1T
-                end
-            else
-                task.wait() -- Nghỉ nếu không đủ tiền mua bất cứ trứng nào
+                -- Gửi lệnh mở trứng
+                Network:InvokeServer("OpenEgg", target, hatchAmount, {})
             end
         end
-    end)
-end
+        task.wait(0.01) -- Tốc độ spam tối đa
+    end
+end)
 
-RunAutoEgg()
 
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 3: LOGIC REBIRTH, WORLD & QUEST ]]
