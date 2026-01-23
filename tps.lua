@@ -124,7 +124,7 @@ local function SmartCleanInventory()
 
     -- Gom ID cần xóa
     local idsToDelete = {}
-    local MAX_KEEP = 30 -- Chỉ giữ 30 con mạnh nhất
+    local MAX_KEEP = 50 -- Chỉ giữ 30 con mạnh nhất
 
     for i, pet in ipairs(allPets) do
         if i > MAX_KEEP then
