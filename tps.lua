@@ -108,7 +108,7 @@ end
 task.spawn(function()
     while true do
         teleportToBestIslandSafe()
-        task.wait(5)
+        task.wait(10)
     end
 end)
 _G.TapsPerSecond = 555
