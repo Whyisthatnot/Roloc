@@ -1,3 +1,4 @@
+setfpscap(5)
 _G.AutoTap = true
 _G.AutoRebirthMax = true
 _G.AutoCollectQuest = true
@@ -51,7 +52,7 @@ local EggDatabase = require(ReplicatedStorage.Game.Eggs)
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 
-_G.TapsPerSecond = 100
+_G.TapsPerSecond = 20
 _G.IsRebirthing = false -- Cầu chì ngắt các luồng khác khi đang Rebirth
 local RunService = game:GetService("RunService")
 local tapAcc = 0
