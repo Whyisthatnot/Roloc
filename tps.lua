@@ -220,6 +220,7 @@ local function RunAutoEgg()
                     if (data.Gamepasses and data.Gamepasses["x8Egg"]) or 
                        (data.ActiveBoosts and data.ActiveBoosts["Octo Incubator"] and data.ActiveBoosts["Octo Incubator"] > 0) then
                         hatchAmount = 8
+                        setfpscap(20)
                     else
                         hatchAmount = 3
                     end
@@ -694,7 +695,7 @@ ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
 local Background = Instance.new('Frame', ScreenGui)
 Background.Size = UDim2.new(1, 0, 1, 0) 
 Background.BackgroundColor3 = Color3.new(0, 0, 0) 
-Background.BackgroundTransparency = 0
+Background.BackgroundTransparency = 0.5
 Background.BorderSizePixel = 0
 
 local MainFrame = Instance.new('Frame', Background)
