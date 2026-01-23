@@ -7,6 +7,10 @@ _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
 _G.AutoElectricSpin = true
 _G.AutoBuyPotion = true
+_G.AutoElectric = {
+    ["Electrical Glitch"] = 3,
+}
+
 _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
@@ -210,8 +214,6 @@ local function SmartCleanInventory()
             end
         end
         print("✅ Đã dọn kho xong!")
-    else
-        print("✨ Kho sạch sẽ, không có pet rác nào cần xóa.")
     end
 end
 
@@ -727,6 +729,71 @@ task.spawn(function()
         end
         -- Kiểm tra lại sau mỗi 2-5 giây là hợp lý nhất để tránh tốn tài nguyên
         task.wait() 
+    end
+end)
+-- CẤU HÌNH: Ông có thể thêm tên pet và số lượng cần gộp tại đây
+_G.AutoElectric = {
+    ["Electrical Glitch"] = 3,
+}
+
+local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
+local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
+
+local function startAutoCraft()
+    
+    local inventory = Replication.Data.Pets
+    local groups = {}
+
+    -- Bước 1: Thu thập pet thỏa mãn điều kiện
+    for id, pet in pairs(inventory) do
+        -- Điều kiện: 
+        -- 1. Có tên trong Config
+        -- 2. Tier là Rainbow
+        -- 3. CHƯA CÓ Mutation Electric
+        -- 4. Không bị khóa (Locked)
+        if _G.AutoElectric[pet.Name] and pet.Tier == "Rainbow" and pet.Mutation ~= "Electric" and not pet.Locked then
+            if not groups[pet.Name] then
+                groups[pet.Name] = {}
+            end
+            table.insert(groups[pet.Name], id)
+        end
+    end
+
+    -- Bước 2: Thực hiện Craft theo số lượng trong Config
+    for petName, ids in pairs(groups) do
+        local requiredAmount = _G.AutoElectric[petName]
+        
+        while #ids >= requiredAmount do
+            -- Cắt ra đúng số lượng cần để gửi lên server
+            local batch = {}
+            for i = 1, requiredAmount do
+                table.insert(batch, ids[1])
+                table.remove(ids, 1)
+            end
+            
+            print("Đang gộp " .. requiredAmount .. " con " .. petName .. " (Rainbow -> Electric)")
+            
+            -- Lệnh Craft lấy từ code decompile (Dòng 403)
+            local success = Network:InvokeServer("CraftPets", batch)
+            
+            if success then
+                print("Craft thành công cho nhóm " .. petName)
+            else
+                warn("Craft thất bại nhóm " .. petName .. " (có thể do tỷ lệ %)")
+            end
+            
+            task.wait(0.5) -- Tránh spam remote quá nhanh
+        end
+    end
+    
+end
+
+task.spawn(function()
+    while true do
+        if _G.AutoElectric and next(_G.AutoElectric) ~= nil then
+            pcall(startAutoCraft)
+        end
+        task.wait(2) -- Chạy lại sau mỗi 10 giây
     end
 end)
 --------------------------
