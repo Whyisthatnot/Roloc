@@ -134,80 +134,87 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 local function SmartCleanInventory()
-    local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
-    local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
-    local PetStats = require(game:GetService("ReplicatedStorage").Game.Eggs) -- Dùng database trứng/pet
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Network = require(ReplicatedStorage.Modules.Network)
+    local Replication = require(ReplicatedStorage.Game.Replication)
+    local PetStats = require(ReplicatedStorage.Game.PetStats) -- Module thần thánh của ông đây
 
-    local inventory = Replication.Data.Pets
+    local inventory = Replication.Data and Replication.Data.Pets
     if not inventory then return end
 
+    -- Thiết lập độ ưu tiên
     local RarityPriority = {
         ["Mythical"] = 5, ["Legendary"] = 4, ["Epic"] = 3, 
         ["Rare"] = 2, ["Uncommon"] = 1, ["Common"] = 0
     }
-
     local TierPriority = {
         ["Void"] = 4, ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
     }
-
     local SafeRarities = {
-        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, 
-        ["Godly"] = true, ["Divine"] = true, ["Celestial"] = true, ["Exotic"] = true
+        ["Secret"] = true, ["Godly"] = true, ["Divine"] = true, ["Celestial"] = true
     }
     
     local allPets = {}
-    
+    local MAX_KEEP = 50 -- Giữ 50 con mạnh nhất
+
     for id, data in pairs(inventory) do
-        -- Lấy rarity từ database nếu data.Rarity không có sẵn
-        local rarity = data.Rarity or "Common"
+        local petName = data.Name or "Unknown"
+        
+        -- Lấy Rarity thật từ hàm GetStats
+        local stats = PetStats:GetStats(petName)
+        local trueRarity = stats and stats.Rarity or "Common"
         local tier = data.Tier or "Normal"
         
-        if data.Equipped or data.Locked or SafeRarities[rarity] then
+        -- 1. BỎ QUA PET ĐANG DÙNG HOẶC QUÁ HIẾM (BẢO VỆ TUYỆT ĐỐI)
+        if data.Equipped or data.Locked or SafeRarities[trueRarity] then
             continue 
         end
 
+        -- 2. TÍNH ĐIỂM ĐỂ SẮP XẾP (Tier quan trọng hơn Rarity)
+        -- Công thức: Tier x 10 + Rarity. Rainbow Common (30) > Normal Legendary (14)
+        local score = (TierPriority[tier] or 0) * 10 + (RarityPriority[trueRarity] or 0)
+
         table.insert(allPets, {
             id = id,
-            rarityLevel = RarityPriority[rarity] or 0,
-            tierLevel = TierPriority[tier] or 0
+            score = score,
+            name = petName
         })
     end
 
-    -- Sắp xếp: Con mạnh lên đầu
+    -- 3. SẮP XẾP: CON CAO ĐIỂM (MẠNH) LÊN ĐẦU
     table.sort(allPets, function(a, b) 
-        if a.rarityLevel ~= b.rarityLevel then
-            return a.rarityLevel > b.rarityLevel
-        end
-        return a.tierLevel > b.tierLevel 
+        return a.score > b.score 
     end)
 
-    -- Gom ID cần xóa
+    -- 4. GOM ID CẦN XÓA (Những con nằm ngoài TOP 50)
     local idsToDelete = {}
-    local MAX_KEEP = 50 -- Chỉ giữ 30 con mạnh nhất
-
     for i, pet in ipairs(allPets) do
         if i > MAX_KEEP then
             table.insert(idsToDelete, pet.id)
         end
     end
 
-    -- THỰC THI XÓA HÀNG LOẠT (BULK DELETE)
+    -- 5. THỰC THI XÓA
     if #idsToDelete > 0 then
+        print("🗑️ Đang dọn dẹp " .. #idsToDelete .. " pet yếu...")
         
-        -- Thử nghiệm gửi cả bảng ID (Cách nhanh nhất)
+        -- Thử xóa hàng loạt trước (Gửi nguyên bảng ID)
         local success = Network:InvokeServer("DeletePet", idsToDelete)
         
-        -- Nếu Server không hỗ trợ gửi cả bảng (vẫn in báo lỗi), 
-        -- nó sẽ tự động dùng vòng lặp siêu tốc không wait
+        -- Nếu server không cho xóa bảng, chuyển sang xóa từng con siêu tốc
         if not success then
-             for _, petId in pairs(idsToDelete) do
-                task.spawn(function() 
-                    Network:InvokeServer("DeletePet", petId) 
+            for _, petId in pairs(idsToDelete) do
+                task.spawn(function()
+                    Network:InvokeServer("DeletePet", petId)
                 end)
-             end
+            end
         end
+        print("✅ Đã dọn kho xong!")
+    else
+        print("✨ Kho sạch sẽ, không có pet rác nào cần xóa.")
     end
 end
+
 
 -- Vòng lặp chạy mỗi 10 giây (nhanh hơn để tránh full kho)
 task.spawn(function()
