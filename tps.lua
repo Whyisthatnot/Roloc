@@ -267,12 +267,7 @@ local function RunAutoEgg()
                     Network:InvokeServer("OpenEgg", target, hatchAmount, {})
                 end)
             end
-            
-            -- Tối ưu tốc độ vòng lặp
-            if currentClicks < MoneyNeeded then
-                task.wait(0.6) 
-            else
-                task.wait(0.1) 
+            task.wait()
             end
         end
     end)
