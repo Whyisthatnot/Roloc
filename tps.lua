@@ -266,7 +266,6 @@ local function RunAutoEgg()
                 pcall(function()
                     Network:InvokeServer("OpenEgg", target, hatchAmount, {})
                 end)
-            end
             task.wait()
             end
         end
