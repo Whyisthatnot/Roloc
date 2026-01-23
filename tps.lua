@@ -237,7 +237,7 @@ local function RunAutoEgg()
                         local finalPrice = Rebirths:ClicksPrice(Rebirths:getPrice(rbAmount), data.Statistics.Rebirths)
                         
                         if currentClicks >= (finalPrice * 0.85) and currentClicks < finalPrice then
-                            task.wait(0.5) 
+                            task.wait() 
                             continue 
                         end
                     end
