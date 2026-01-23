@@ -102,7 +102,7 @@ local function SmartCleanInventory()
     -- Các loại cực hiếm thì không bao giờ đưa vào danh sách xóa
     local SafeRarities = {
         ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, 
-        ["Godly"] = true, ["Divine"] = true, ["Celestial"] = true, ["Exotic"] = true
+        ["Godly"] = true, ["Leaderboard"] = true,
     }
     
     local allPets = {}
