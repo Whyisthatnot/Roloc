@@ -13,7 +13,7 @@ _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
         "Tap",
-        "Rebirth"
+        "Rebirth",
         "Gem",
         "Luck",
         "Taco",
