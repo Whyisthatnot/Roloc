@@ -12,6 +12,9 @@ _G.AutoElectric = {["Electrical Glitch"] = 3}
 _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
+        "Tap",
+        "Rebirth"
+        "Gem",
         "Luck",
         "Taco",
         "Octo"
