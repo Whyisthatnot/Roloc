@@ -107,109 +107,109 @@ local function teleportToBestIslandSafe()
 end
 
 
-_G.TapsPerSecond = 555
-_G.IsRebirthing = false -- Cầu chì ngắt các luồng khác khi đang Rebirth
-local RunService = game:GetService("RunService")
-local tapAcc = 0
 
-RunService.Heartbeat:Connect(function(dt)
-    if _G.AutoTap and not _G.IsRebirthing then
-        tapAcc = tapAcc + dt
-        local tapInterval = 1 / (_G.TapsPerSecond or 10)
-        local taps = math.floor(tapAcc / tapInterval)
-
-        if taps > 0 then
-            for i = 1, math.min(taps, 50) do 
-                if _G.IsRebirthing then break end
-                Network:FireServer("Tap", true, false, true)
+task.spawn(function()
+    while true do
+        if _G.AutoTap == true then
+            for i = 1,2 do
+                Network:FireServer("Tap", true , false, false)
             end
-            tapAcc = 0
+            Network:FireServer("Tap", true , false, true)
         end
-    else
-        tapAcc = 0 
+        task.wait(0.1) -- giảm lag, FPS thấp vẫn ổn
     end
 end)
+
 
 local function SmartCleanInventory()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
     local Replication = require(ReplicatedStorage.Game.Replication)
-    local PetStats = require(ReplicatedStorage.Game.PetStats) -- Module thần thánh của ông đây
+    local PetStats = require(ReplicatedStorage.Game.PetStats)
 
     local inventory = Replication.Data and Replication.Data.Pets
     if not inventory then return end
 
-    -- Thiết lập độ ưu tiên
     local RarityPriority = {
-        ["Mythical"] = 5, ["Legendary"] = 4, ["Epic"] = 3, 
-        ["Rare"] = 2, ["Uncommon"] = 1, ["Common"] = 0
+        ["Mythical"] = 6, ["Legendary"] = 5, ["Epic"] = 4, 
+        ["Rare"] = 3, ["Uncommon"] = 2, ["Common"] = 1
     }
     local TierPriority = {
-         ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
+        ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
     }
     local SafeRarities = {
         ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Celestial"] = true
     }
     
     local allPets = {}
-    local MAX_KEEP = 50 -- Giữ 50 con mạnh nhất
+    local MAX_KEEP = 50 
 
     for id, data in pairs(inventory) do
-        local petName = data.Name or "Unknown"
-        
-        -- Lấy Rarity thật từ hàm GetStats
-        local stats = PetStats:GetStats(petName)
+        local stats = PetStats:GetStats(data.Name)
         local trueRarity = stats and stats.Rarity or "Common"
-        local tier = data.Tier or "Normal"
         
-        -- 1. BỎ QUA PET ĐANG DÙNG HOẶC QUÁ HIẾM (BẢO VỆ TUYỆT ĐỐI)
         if data.Equipped or data.Locked or SafeRarities[trueRarity] then
             continue 
         end
 
-        -- 2. TÍNH ĐIỂM ĐỂ SẮP XẾP (Tier quan trọng hơn Rarity)
-        -- Công thức: Tier x 10 + Rarity. Rainbow Common (30) > Normal Legendary (14)
-        local score = (TierPriority[tier] or 0) * 10 + (RarityPriority[trueRarity] or 0)
+        -- Tính Power thực tế từ hàm của game
+        local currentPower = 0
+        pcall(function()
+            currentPower = PetStats:GetMulti(data.Multi1 or 1, data.Tier, data.Level, data)
+        end)
+        if currentPower == 0 then currentPower = data.Multi1 or 0 end
 
         table.insert(allPets, {
             id = id,
-            score = score,
-            name = petName
+            name = data.Name,
+            power = currentPower,
+            rarityVal = RarityPriority[trueRarity] or 0,
+            tierVal = TierPriority[data.Tier] or 0,
+            tierName = data.Tier or "Normal",
+            rarityName = trueRarity
         })
     end
 
-    -- 3. SẮP XẾP: CON CAO ĐIỂM (MẠNH) LÊN ĐẦU
-    table.sort(allPets, function(a, b) 
-        return a.score > b.score 
+    -- Sắp xếp: Power > Rarity > Tier
+    table.sort(allPets, function(a, b)
+        if a.power ~= b.power then return a.power > b.power end
+        if a.rarityVal ~= b.rarityVal then return a.rarityVal > b.rarityVal end
+        return a.tierVal > b.tierVal
     end)
 
-    -- 4. GOM ID CẦN XÓA (Những con nằm ngoài TOP 50)
     local idsToDelete = {}
-    for i, pet in ipairs(allPets) do
-        if i > MAX_KEEP then
+    local deleteSummary = {} -- Bảng dùng để gom nhóm in debug
+
+    if #allPets > MAX_KEEP then
+        for i = MAX_KEEP + 1, #allPets do
+            local pet = allPets[i]
             table.insert(idsToDelete, pet.id)
+
+            -- Tạo mã định danh nhóm (Tên + Tier + Rarity)
+            local groupKey = string.format("%s [%s - %s]", pet.name, pet.tierName, pet.rarityName)
+            
+            if not deleteSummary[groupKey] then
+                deleteSummary[groupKey] = {count = 0, power = pet.power}
+            end
+            deleteSummary[groupKey].count = deleteSummary[groupKey].count + 1
+        end
+
+        -- IN DEBUG ĐÃ GOM NHÓM
+        for info, data in pairs(deleteSummary) do
+            -- In theo format: ❌ Xóa 5x Dog [Normal - Common] (Power: 100)
+            print(string.format("❌ Xóa %dx %s (Power: %d)", data.count, info, data.power))
         end
     end
 
-    -- 5. THỰC THI XÓA
     if #idsToDelete > 0 then
-        print("🗑️ Đang dọn dẹp " .. #idsToDelete .. " pet yếu...")
-        
-        -- Thử xóa hàng loạt trước (Gửi nguyên bảng ID)
         local success = Network:InvokeServer("DeletePet", idsToDelete)
-        
-        -- Nếu server không cho xóa bảng, chuyển sang xóa từng con siêu tốc
         if not success then
             for _, petId in pairs(idsToDelete) do
-                task.spawn(function()
-                    Network:InvokeServer("DeletePet", petId)
-                end)
+                task.spawn(function() Network:InvokeServer("DeletePet", petId) end)
             end
         end
-        print("✅ Đã dọn kho xong!")
     end
 end
-
 
 -- Vòng lặp chạy mỗi 10 giây (nhanh hơn để tránh full kho)
 task.spawn(function()
