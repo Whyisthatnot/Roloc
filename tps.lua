@@ -138,7 +138,7 @@ local function SmartCleanInventory()
         ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
     }
     local SafeRarities = {
-        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Celestial"] = true
+        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Legendary"] = true
     }
     
     local allPets = {}
