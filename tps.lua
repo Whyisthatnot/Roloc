@@ -53,7 +53,36 @@ local EggDatabase = require(ReplicatedStorage.Game.Eggs)
 local CollectionService = game:GetService("CollectionService")
 local PortalsDB = require(ReplicatedStorage.Game.Portals) -- Database chứa Index đảo
 local player = Players.LocalPlayer
+-------------
+-- AUTO DELETE BY RARITY FOR "Lightning Event"
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Replication = require(ReplicatedStorage.Game.Replication)
+local Eggs = require(ReplicatedStorage.Game.Eggs)
+local PetStats = require(ReplicatedStorage.Game.PetStats)
+
+local EGG_NAME = "Lightning Event"
+
+-- ❌ Những rarity sẽ bị auto delete
+local DELETE_RARITY = {
+    Common = true,
+    Uncommon = true,
+    Rare = true,
+    Epic = true,
+}
+
+Replication.Data.AutoDeleting = Replication.Data.AutoDeleting or {}
+Replication.Data.AutoDeleting[EGG_NAME] = {}
+
+for petName, _ in pairs(Eggs[EGG_NAME].Pets) do
+    local rarity = PetStats:GetRarity(petName, true)
+    if DELETE_RARITY[rarity] then
+        table.insert(Replication.Data.AutoDeleting[EGG_NAME], petName)
+    end
+end
+
+print("⚡ Auto Delete ON for egg:", EGG_NAME)
+--------------
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
@@ -818,34 +847,6 @@ task.spawn(function()
         task.wait(1)
     end
 end)
--- AUTO DELETE BY RARITY FOR "Lightning Event"
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Replication = require(ReplicatedStorage.Game.Replication)
-local Eggs = require(ReplicatedStorage.Game.Eggs)
-local PetStats = require(ReplicatedStorage.Game.PetStats)
-
-local EGG_NAME = "Lightning Event"
-
--- ❌ Những rarity sẽ bị auto delete
-local DELETE_RARITY = {
-    Common = true,
-    Uncommon = true,
-    Rare = true,
-    Epic = true,
-}
-
-Replication.Data.AutoDeleting = Replication.Data.AutoDeleting or {}
-Replication.Data.AutoDeleting[EGG_NAME] = {}
-
-for petName, _ in pairs(Eggs[EGG_NAME].Pets) do
-    local rarity = PetStats:GetRarity(petName, true)
-    if DELETE_RARITY[rarity] then
-        table.insert(Replication.Data.AutoDeleting[EGG_NAME], petName)
-    end
-end
-
-print("⚡ Auto Delete ON for egg:", EGG_NAME)
 
 
 --------------------------
