@@ -26,7 +26,7 @@ _G.AutoHatch = {
 _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Electrical Glitch"] = 4,
+        ["Electrical Glitch"] = 5,
     }
 }
 _G.AutoRainbow = {
@@ -92,7 +92,6 @@ local function teleportToBestIslandSafe()
         rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 50, 0))
         
         -- Khóa nhân vật lại trên không
-        rootPart.Anchored = true
         
         -- Đợi 1 giây để map load
         task.wait(1)
@@ -537,17 +536,17 @@ local function RunAutoCraftGolden()
                     
                     local success = Network:InvokeServer("CraftPets", craftBatch)
                     if success then
-                        print("golden: " .. petRealName)
+                        print("✅ Golden thành công: " .. petRealName)
                     end
                     task.wait(0.5)
                 end
             end
         end
 
+        -- 4. Quay lại vị trí cũ sau khi ép xong
         RootPart.CFrame = oldCFrame
     end
 end
-
 
 local RAINBOW_MACHINE_POS = Vector3.new(1205.83, 668.98, -13383.21)
 
@@ -610,7 +609,8 @@ local function RunAutoRainbow()
             local success = Network:InvokeServer("StartRainbow", batch)
             if success then
                 hasAction = true
-                print('claim rainbow')
+                print('start rainbow')
+                task.wait(1)
             end
         end
 
@@ -806,11 +806,11 @@ task.spawn(function()
         if _G.AutoGoldenConfig and _G.AutoGoldenConfig.Enabled then
             pcall(RunAutoCraftGolden)
         end
-        task.wait(0.5)
+        task.wait(1)
         if _G.AutoRainbow and _G.AutoRainbow.Enabled then
             pcall(RunAutoRainbow)
         end
-        task.wait(0.5)
+        task.wait(1)
         if _G.AutoElectric and next(_G.AutoElectric) ~= nil then
             pcall(startAutoCraft)
         end
