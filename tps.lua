@@ -54,34 +54,7 @@ local CollectionService = game:GetService("CollectionService")
 local PortalsDB = require(ReplicatedStorage.Game.Portals) -- Database chứa Index đảo
 local player = Players.LocalPlayer
 -------------
--- AUTO DELETE BY RARITY FOR "Lightning Event"
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Replication = require(ReplicatedStorage.Game.Replication)
-local Eggs = require(ReplicatedStorage.Game.Eggs)
-local PetStats = require(ReplicatedStorage.Game.PetStats)
-
-local EGG_NAME = "Lightning Event"
-
--- ❌ Những rarity sẽ bị auto delete
-local DELETE_RARITY = {
-    Common = true,
-    Uncommon = true,
-    Rare = true,
-    Epic = true,
-}
-
-Replication.Data.AutoDeleting = Replication.Data.AutoDeleting or {}
-Replication.Data.AutoDeleting[EGG_NAME] = {}
-
-for petName, _ in pairs(Eggs[EGG_NAME].Pets) do
-    local rarity = PetStats:GetRarity(petName, true)
-    if DELETE_RARITY[rarity] then
-        table.insert(Replication.Data.AutoDeleting[EGG_NAME], petName)
-    end
-end
-
-print("⚡ Auto Delete ON for egg:", EGG_NAME)
 --------------
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
@@ -119,7 +92,7 @@ local function teleportToBestIslandSafe()
         rootPart.Velocity = Vector3.zero
         -- Dịch chuyển lên cao 25 block để an toàn tuyệt đối
         rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 50, 0))
-        
+        rootPart.Anchored = true
         -- Khóa nhân vật lại trên không
         
         -- Đợi 1 giây để map load
