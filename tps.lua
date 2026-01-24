@@ -812,7 +812,7 @@ task.spawn(function()
         end
         task.wait(1)
         if _G.AutoElectric and next(_G.AutoElectric) ~= nil then
-            pcall(startAutoCraft)
+            pcall(startAutoCraftElectric)
         end
         teleportToBestIslandSafe()
         task.wait(1)
