@@ -7,9 +7,7 @@ _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
 _G.AutoElectricSpin = true
 _G.AutoBuyPotion = true
-_G.AutoElectric = {
-    ["Electrical Glitch"] = 3,
-}
+_G.AutoElectric = {["Electrical Glitch"] = 3}
 
 _G.AutoPotion = {
     ["Enabled"] = true,
@@ -89,32 +87,22 @@ local function teleportToBestIslandSafe()
     end
 
     if bestIslandPart then
-        -- Chống văng và giữ đứng im
         rootPart.Velocity = Vector3.zero
-        
         -- Dịch chuyển lên cao 25 block để an toàn tuyệt đối
-        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 25, 0))
+        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 50, 0))
         
         -- Khóa nhân vật lại trên không
         rootPart.Anchored = true
         
         -- Đợi 1 giây để map load
         task.wait(1)
-        
-        -- Thả nhân vật ra
+
     else
         warn("Không tìm thấy đảo nào hợp lệ!")
     end
 end
 
--- Thực thi
--- Cách dùng: Cho vào vòng lặp
-task.spawn(function()
-    while true do
-        teleportToBestIslandSafe()
-        task.wait(10)
-    end
-end)
+
 _G.TapsPerSecond = 555
 _G.IsRebirthing = false -- Cầu chì ngắt các luồng khác khi đang Rebirth
 local RunService = game:GetService("RunService")
@@ -137,6 +125,7 @@ RunService.Heartbeat:Connect(function(dt)
         tapAcc = 0 
     end
 end)
+
 local function SmartCleanInventory()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
@@ -152,10 +141,10 @@ local function SmartCleanInventory()
         ["Rare"] = 2, ["Uncommon"] = 1, ["Common"] = 0
     }
     local TierPriority = {
-        ["Void"] = 4, ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
+         ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
     }
     local SafeRarities = {
-        ["Secret"] = true, ["Godly"] = true, ["Divine"] = true, ["Celestial"] = true
+        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Celestial"] = true
     }
     
     local allPets = {}
@@ -306,42 +295,62 @@ end)
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 3: LOGIC REBIRTH, WORLD & QUEST ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
+
 task.spawn(function()
     local lastRebirthTick = 0
-    while task.wait(0.2) do
+    local MAX_INDEX_LIMIT = 23 -- Giới hạn index cao nhất ông muốn
+
+    while task.wait(0.5) do 
         local data = Replication.Data
         if not data or not data.Statistics then continue end
 
-        -- 1. Auto Rebirth Max (Giới hạn Index tối đa là 20)
+        -- 1. Auto Rebirth Logic
         if _G.AutoRebirthMax == true and not _G.IsRebirthing then
             local options = data.RebirthOptions
-            -- Lấy index cao nhất hiện có trong data
             local rawMaxIdx = (type(options) == "table" and #options) or (tonumber(options) or 0)
-            
-            -- CHỈNH SỬA TẠI ĐÂY: Dùng math.min để giới hạn tối đa là 20
-            local maxIdx = math.min(rawMaxIdx, 23) 
+            local startIdx = math.min(rawMaxIdx, MAX_INDEX_LIMIT) 
 
-            if maxIdx > 0 and (tick() - lastRebirthTick >= 0.5) then
-                local rbAmount = Rebirths:fromIndex(maxIdx)
-                local basePrice = Rebirths:getPrice(rbAmount)
-                local finalPrice = Rebirths:ClicksPrice(basePrice, data.Statistics.Rebirths)
+            -- Kiểm tra giá của cái CAO NHẤT (Index 23)
+            local topRbAmount = Rebirths:fromIndex(startIdx)
+            local topBasePrice = Rebirths:getPrice(topRbAmount)
+            local topFinalPrice = Rebirths:ClicksPrice(topBasePrice, data.Statistics.Rebirths)
 
-                if data.Statistics.Clicks >= finalPrice then
-                    _G.IsRebirthing = true 
-                    task.wait(0.1)
-                    
-                    local success = pcall(function()
-                        -- Thực hiện rebirth với index đã giới hạn
-                        return Network:InvokeServer("Rebirth", maxIdx)
-                    end)
-                    
-                    if success then
-                        lastRebirthTick = tick()
+            local shouldRebirth = false
+            local targetIdx = 0
+
+            -- ĐIỀU KIỆN 1: Nếu ĐỦ TIỀN mua cái cao nhất -> Mua luôn
+            if data.Statistics.Clicks >= topFinalPrice then
+                shouldRebirth = true
+                targetIdx = startIdx
+            -- ĐIỀU KIỆN 2: Nếu CHƯA ĐỦ cái cao nhất, nhưng đã QUÁ 60 GIÂY -> Tìm cái cao nhất trong tầm tiền
+            elseif (tick() - lastRebirthTick >= 60) then
+                for i = startIdx, 1, -1 do
+                    local rbAmount = Rebirths:fromIndex(i)
+                    local basePrice = Rebirths:getPrice(rbAmount)
+                    local finalPrice = Rebirths:ClicksPrice(basePrice, data.Statistics.Rebirths)
+
+                    if data.Statistics.Clicks >= finalPrice then
+                        targetIdx = i
+                        shouldRebirth = true
+                        break 
                     end
-                    
-                    task.wait(0.2)
-                    _G.IsRebirthing = false 
                 end
+            end
+
+            -- Thực hiện Rebirth nếu thỏa mãn 1 trong 2 điều kiện trên
+            if shouldRebirth and targetIdx > 0 then
+                _G.IsRebirthing = true 
+                
+                local success = pcall(function()
+                    return Network:InvokeServer("Rebirth", targetIdx)
+                end)
+                
+                if success then
+                    lastRebirthTick = tick() -- Reset đồng hồ
+                end
+                
+                task.wait(0.2)
+                _G.IsRebirthing = false 
             end
         end
 
@@ -355,7 +364,6 @@ task.spawn(function()
         end
     end
 end)
-
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 -- [[ LUỒNG 4: AUTO ZONE (PORTAL) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
@@ -529,7 +537,7 @@ local function RunAutoCraftGolden()
                     
                     local success = Network:InvokeServer("CraftPets", craftBatch)
                     if success then
-                        print("✅ Golden thành công: " .. petRealName)
+                        print("golden: " .. petRealName)
                     end
                     task.wait(0.5)
                 end
@@ -539,16 +547,6 @@ local function RunAutoCraftGolden()
         RootPart.CFrame = oldCFrame
     end
 end
-
--- Vòng lặp kiểm tra mỗi 10 giây
-task.spawn(function()
-    while true do
-        if _G.AutoGoldenConfig and _G.AutoGoldenConfig.Enabled then
-            pcall(RunAutoCraftGolden)
-        end
-        task.wait(1)
-    end
-end)
 
 
 local RAINBOW_MACHINE_POS = Vector3.new(1205.83, 668.98, -13383.21)
@@ -602,6 +600,7 @@ local function RunAutoRainbow()
         for slotId, data in pairs(activeCrafts) do
             if data.EndTime - workspace:GetServerTimeNow() <= 0 then
                 Network:InvokeServer("ClaimRainbow", slotId)
+                print('claim rainbow')
                 hasAction = true
                 task.wait(0.5)
             end
@@ -611,8 +610,7 @@ local function RunAutoRainbow()
             local success = Network:InvokeServer("StartRainbow", batch)
             if success then
                 hasAction = true
-            else
-                Network:InvokeServer("StartRainbow", "1", batch)
+                print('claim rainbow')
             end
         end
 
@@ -623,14 +621,7 @@ local function RunAutoRainbow()
     end
 end
 
-task.spawn(function()
-    while true do
-        if _G.AutoRainbow and _G.AutoRainbow.Enabled then
-            pcall(RunAutoRainbow)
-        end
-        task.wait(1)
-    end
-end)
+
 -- 1. Ẩn mọi thứ trong Workspace (Transparency = 1 và tắt Va chạm)
 for _, item in ipairs(workspace:GetDescendants()) do
     if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
@@ -731,71 +722,103 @@ task.spawn(function()
         task.wait() 
     end
 end)
--- CẤU HÌNH: Ông có thể thêm tên pet và số lượng cần gộp tại đây
-_G.AutoElectric = {
-    ["Electrical Glitch"] = 3,
-}
 
-local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
-local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
+local ELECTRIC_MACHINE_POS = Vector3.new(-99.08, 209.93 + 3, 205.80)
 
-local function startAutoCraft()
+local function startAutoCraftElectric()
+    if not _G.AutoElectric then return end
     
-    local inventory = Replication.Data.Pets
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Replication = require(ReplicatedStorage.Game.Replication)
+    local Network = require(ReplicatedStorage.Modules.Network)
+    local Signal = require(ReplicatedStorage.Modules.Signal)
+    
+    local Player = game.Players.LocalPlayer
+    local Character = Player.Character
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+    local RootPart = Character.HumanoidRootPart
+    
+    local inventory = Replication.Data and Replication.Data.Pets
+    if not inventory then return end
+
     local groups = {}
+    local hasEnoughToCraft = false
 
-    -- Bước 1: Thu thập pet thỏa mãn điều kiện
+    -- Bước 1: Thu thập và kiểm tra điều kiện
     for id, pet in pairs(inventory) do
-        -- Điều kiện: 
-        -- 1. Có tên trong Config
-        -- 2. Tier là Rainbow
-        -- 3. CHƯA CÓ Mutation Electric
-        -- 4. Không bị khóa (Locked)
-        if _G.AutoElectric[pet.Name] and pet.Tier == "Rainbow" and pet.Mutation ~= "Electric" and not pet.Locked then
+        -- Điều kiện: Tên trong Config, Tier Rainbow, chưa có Mutation Electric, ko Lock, ko Đang đeo
+        if _G.AutoElectric[pet.Name] and pet.Tier == "Rainbow" and pet.Mutation ~= "Electric" and not pet.Locked and not pet.Equipped then
             if not groups[pet.Name] then
-                groups[pet.Name] = {}
+                groups[pet.Name] = {ids = {}, required = _G.AutoElectric[pet.Name]}
             end
-            table.insert(groups[pet.Name], id)
+            table.insert(groups[pet.Name].ids, id)
         end
     end
 
-    -- Bước 2: Thực hiện Craft theo số lượng trong Config
-    for petName, ids in pairs(groups) do
-        local requiredAmount = _G.AutoElectric[petName]
+    -- Kiểm tra xem có nhóm nào đủ số lượng để craft không
+    for petName, data in pairs(groups) do
+        if #data.ids >= data.required then
+            hasEnoughToCraft = true
+            break
+        end
+    end
+
+    -- Bước 2: Nếu đủ pet thì mới Teleport và thực hiện Craft
+    if hasEnoughToCraft then
+        local oldCFrame = RootPart.CFrame -- Lưu vị trí cũ
         
-        while #ids >= requiredAmount do
-            -- Cắt ra đúng số lượng cần để gửi lên server
-            local batch = {}
-            for i = 1, requiredAmount do
-                table.insert(batch, ids[1])
-                table.remove(ids, 1)
-            end
-            
-            print("Đang gộp " .. requiredAmount .. " con " .. petName .. " (Rainbow -> Electric)")
-            
-            -- Lệnh Craft lấy từ code decompile (Dòng 403)
-            local success = Network:InvokeServer("CraftPets", batch)
-            
-            if success then
-                print("Craft thành công cho nhóm " .. petName)
-            else
-                warn("Craft thất bại nhóm " .. petName .. " (có thể do tỷ lệ %)")
-            end
-            
-            task.wait(0.5) -- Tránh spam remote quá nhanh
-        end
-    end
-    
-end
+        RootPart.CFrame = CFrame.new(ELECTRIC_MACHINE_POS)
+        task.wait(0.7) -- Đợi server cập nhật vị trí
 
+        for petName, data in pairs(groups) do
+            while #data.ids >= data.required do
+                local batch = {}
+                for i = 1, data.required do
+                    table.insert(batch, data.ids[1])
+                    table.remove(data.ids, 1)
+                end
+                
+                
+                -- Gửi lệnh Craft lên Server
+                local success = Network:InvokeServer("CraftPets", batch)
+                
+                if success then
+                    print('craft electric: ' .. petName)
+                else
+                    warn("❌ Chế tạo thất bại: " .. petName)
+                end
+                
+                task.wait(0.5) -- Tránh spam remote
+            end
+        end
+
+        -- Quay về vị trí cũ sau khi xong việc
+        task.wait(0.5)
+        RootPart.CFrame = oldCFrame
+        print("🏠 Đã quay lại vị trí ban đầu.")
+    end
+end
+--------------------------
+
+-- Vòng lặp kiểm tra mỗi 10 giây
 task.spawn(function()
     while true do
+        if _G.AutoGoldenConfig and _G.AutoGoldenConfig.Enabled then
+            pcall(RunAutoCraftGolden)
+        end
+        task.wait(0.5)
+        if _G.AutoRainbow and _G.AutoRainbow.Enabled then
+            pcall(RunAutoRainbow)
+        end
+        task.wait(0.5)
         if _G.AutoElectric and next(_G.AutoElectric) ~= nil then
             pcall(startAutoCraft)
         end
-        task.wait(2) -- Chạy lại sau mỗi 10 giây
+        teleportToBestIslandSafe()
+        task.wait(1)
     end
 end)
+
 --------------------------
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
@@ -816,7 +839,7 @@ local Background = Instance.new('Frame', ScreenGui)
 Background.Size = UDim2.new(1, 0, 1, 0) 
 Background.BackgroundColor3 = Color3.new(0, 0, 0) 
 Background.BackgroundTransparency = 0.5
-Background.BorderSizePixel = 0
+Background.BorderSizePixel = 0.5
 
 local MainFrame = Instance.new('Frame', Background)
 MainFrame.Size = UDim2.new(0.9, 0, 0.9, 0)
@@ -943,10 +966,5 @@ end)
 
 local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 
-for _, gui in ipairs(playerGui:GetChildren()) do
-    if gui:IsA("ScreenGui") then
-        gui.Enabled = false
-    end
-end
 ----------------
---end
+--ends
