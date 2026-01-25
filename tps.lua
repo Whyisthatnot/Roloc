@@ -23,7 +23,7 @@ _G.AutoPotion = {
 _G.AutoHatch = {
     ["Enabled"] = true,
     ["Egg"] = {
-        ["Lightning Event"] = true,
+        ["Snowman"] = true,
     }
 }
 _G.AutoGoldenConfig = {
