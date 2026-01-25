@@ -94,10 +94,10 @@ local function teleportToBestIslandSafe()
     if bestIslandPart then
         rootPart.Velocity = Vector3.zero
         -- Dịch chuyển lên cao 25 block để an toàn tuyệt đối
-        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 50, 0))
-        rootPart.Anchored = true
+        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 75, 0))
         -- Khóa nhân vật lại trên không
-        
+        rootPart.Anchored = true
+
         -- Đợi 1 giây để map load
         task.wait(1)
 
@@ -119,8 +119,6 @@ task.spawn(function()
         task.wait(0.1) -- giảm lag, FPS thấp vẫn ổn
     end
 end)
-
-
 local function SmartCleanInventory()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
@@ -138,21 +136,21 @@ local function SmartCleanInventory()
         ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
     }
     local SafeRarities = {
-        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Legendary"] = true
+        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Legendary"] = true, ["Mythical"] = true
     }
     
     local allPets = {}
-    local MAX_KEEP = 50 
+    local MAX_KEEP = 0 
 
     for id, data in pairs(inventory) do
         local stats = PetStats:GetStats(data.Name)
         local trueRarity = stats and stats.Rarity or "Common"
         
+        -- Lọc bỏ pet quan trọng
         if data.Equipped or data.Locked or SafeRarities[trueRarity] then
             continue 
         end
 
-        -- Tính Power thực tế từ hàm của game
         local currentPower = 0
         pcall(function()
             currentPower = PetStats:GetMulti(data.Multi1 or 1, data.Tier, data.Level, data)
@@ -170,7 +168,7 @@ local function SmartCleanInventory()
         })
     end
 
-    -- Sắp xếp: Power > Rarity > Tier
+    -- Sắp xếp yếu xuống dưới
     table.sort(allPets, function(a, b)
         if a.power ~= b.power then return a.power > b.power end
         if a.rarityVal ~= b.rarityVal then return a.rarityVal > b.rarityVal end
@@ -178,27 +176,19 @@ local function SmartCleanInventory()
     end)
 
     local idsToDelete = {}
-    local deleteSummary = {} -- Bảng dùng để gom nhóm in debug
+    local deleteSummary = {}
 
     if #allPets > MAX_KEEP then
         for i = MAX_KEEP + 1, #allPets do
             local pet = allPets[i]
             table.insert(idsToDelete, pet.id)
 
-            -- Tạo mã định danh nhóm (Tên + Tier + Rarity)
             local groupKey = string.format("%s [%s - %s]", pet.name, pet.tierName, pet.rarityName)
-            
-            if not deleteSummary[groupKey] then
-                deleteSummary[groupKey] = {count = 0, power = pet.power}
-            end
-            deleteSummary[groupKey].count = deleteSummary[groupKey].count + 1
+            deleteSummary[groupKey] = (deleteSummary[groupKey] or 0) + 1
         end
+        
+        -- Chỉ in kết quả cuối cùng
 
-        -- IN DEBUG ĐÃ GOM NHÓM
-        for info, data in pairs(deleteSummary) do
-            -- In theo format: ❌ Xóa 5x Dog [Normal - Common] (Power: 100)
-            print(string.format("❌ Xóa %dx %s (Power: %d)", data.count, info, data.power))
-        end
     end
 
     if #idsToDelete > 0 then
@@ -211,7 +201,6 @@ local function SmartCleanInventory()
     end
 end
 
--- Vòng lặp chạy mỗi 10 giây (nhanh hơn để tránh full kho)
 task.spawn(function()
     while true do
         pcall(function()
@@ -523,7 +512,10 @@ local function RunAutoCraftGolden()
 
     -- 3. Thực hiện Teleport và Ép
     if needsToTeleport then
+        print(">>> Đang Teleport về máy Golden...")
         RootPart.CFrame = CFrame.new(GOLDEN_MACHINE_POS)
+        RootPart.Anchored = false
+
         task.wait(0.6) -- Đợi server nhận vị trí
 
         for petRealName, data in pairs(groups) do
@@ -548,7 +540,6 @@ local function RunAutoCraftGolden()
             end
         end
 
-        -- 4. Quay lại vị trí cũ sau khi ép xong
         RootPart.CFrame = oldCFrame
     end
 end
@@ -599,6 +590,8 @@ local function RunAutoRainbow()
 
     if needClaim or (canCraft and slotCount < 3) then
         RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS)
+        RootPart.Anchored = false
+
         task.wait()
 
         for slotId, data in pairs(activeCrafts) do
@@ -615,7 +608,6 @@ local function RunAutoRainbow()
             if success then
                 hasAction = true
                 print('start rainbow')
-                task.wait(1)
             end
         end
 
@@ -773,6 +765,9 @@ local function startAutoCraftElectric()
         local oldCFrame = RootPart.CFrame -- Lưu vị trí cũ
         
         RootPart.CFrame = CFrame.new(ELECTRIC_MACHINE_POS)
+        task.wait()
+        RootPart.Anchored = false
+
         task.wait(0.7) -- Đợi server cập nhật vị trí
 
         for petName, data in pairs(groups) do
@@ -800,7 +795,6 @@ local function startAutoCraftElectric()
         -- Quay về vị trí cũ sau khi xong việc
         task.wait(0.5)
         RootPart.CFrame = oldCFrame
-        print("🏠 Đã quay lại vị trí ban đầu.")
     end
 end
 --------------------------
@@ -809,15 +803,19 @@ end
 task.spawn(function()
     while true do
         if _G.AutoGoldenConfig and _G.AutoGoldenConfig.Enabled then
-            pcall(RunAutoCraftGolden)
+            print("Golden")
+
+            RunAutoCraftGolden()
         end
         task.wait(1)
         if _G.AutoRainbow and _G.AutoRainbow.Enabled then
-            pcall(RunAutoRainbow)
+            print("Rainbow")
+            RunAutoRainbow()
         end
         task.wait(1)
         if _G.AutoElectric and next(_G.AutoElectric) ~= nil then
-            pcall(startAutoCraftElectric)
+            print("Electric")
+            startAutoCraftElectric()
         end
         teleportToBestIslandSafe()
         task.wait(1)
