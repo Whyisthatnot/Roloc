@@ -76,6 +76,9 @@ local EggDatabase = require(ReplicatedStorage.Game.Eggs)
 local CollectionService = game:GetService("CollectionService")
 local PortalsDB = require(ReplicatedStorage.Game.Portals) -- Database chứa Index đảo
 local player = Players.LocalPlayer
+local Signal = require(ReplicatedStorage.Modules.Signal)
+local PortalsData = require(ReplicatedStorage.Game.Portals)
+
 -------------
 
 --------------
@@ -83,53 +86,68 @@ local player = Players.LocalPlayer
 -- [[ LUỒNG 1: AUTO TAP (HEARTBEAT) ]]
 --- --- --- --- --- --- --- --- --- --- --- --- ---
 
-local function teleportToBestIslandSafe()
-    local player = Players.LocalPlayer
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-    
-    local rootPart = character.HumanoidRootPart
-    local data = Replication.Data
-    
-    if not data or not data.Portals then 
-        warn("Dữ liệu game chưa load!")
-        return 
+-- 1. CHẶN UI TỪ GỐC (HOOKING) - Chỉ chạy 1 lần
+if not _G.AntUIHooked then
+    local oldFire = Signal.Fire
+    Signal.Fire = function(name, ...)
+        local args = {...}
+        if name == "OpenMessage" and (args[1] == "Teleport") then
+            return -- Chặn đứng bảng xác nhận
+        end
+        return oldFire(name, ...)
     end
+    _G.AntUIHooked = true
+end
 
-    local bestIslandPart = nil
-    local maxDistance = -1
-    local unlockedIslands = data.Portals
+local function SmartTeleportNoUI()
+    local data = Replication.Data
+    if not data or not data.Portals then return end
 
-    -- Tìm đảo mạnh nhất đã mở khóa
-    for _, part in ipairs(CollectionService:GetTagged("IslandPart")) do
-        if unlockedIslands[part.Name] then
-            local dist = part.Position.Magnitude
-            if dist > maxDistance then
-                maxDistance = dist
-                bestIslandPart = part
-            end
+    -- 2. Tìm cổng cao nhất đã mở khóa
+    local sortedPortals = {}
+    for name, info in pairs(PortalsData) do
+        table.insert(sortedPortals, {Name = name, Price = info.Price})
+    end
+    table.sort(sortedPortals, function(a, b) return a.Price > b.Price end)
+
+    local targetPortalName = nil
+    for _, portal in ipairs(sortedPortals) do
+        if data.Portals[portal.Name] then
+            targetPortalName = portal.Name
+            break 
         end
     end
 
-    if bestIslandPart then
-        rootPart.Velocity = Vector3.zero
-        -- Dịch chuyển lên cao 25 block để an toàn tuyệt đối
-        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 5, 0))
+    -- 3. SO SÁNH ZONE HIỆN TẠI (Thay thế check khoảng cách)
+    if targetPortalName then
+        local currentZone = data.Zone or "Unknown"
+        
+        -- Nếu zone hiện tại đã là zone mạnh nhất thì dừng luôn
+        if currentZone == targetPortalName then
+            -- print("📍 Đã ở đúng Zone: " .. currentZone)
+            return 
+        end
 
-
-        task.wait(1)
-
-    else
-        warn("Không tìm thấy đảo nào hợp lệ!")
+        -- 4. THỰC THI TELEPORT
+        print("🚀 Đang chuyển từ [" .. currentZone .. "] lên [" .. targetPortalName .. "]")
+        
+        -- Cập nhật local data trước để tránh loop
+        data.Zone = targetPortalName
+        
+        -- Gửi lệnh lên Server
+        task.spawn(function()
+            Network:InvokeServer("TeleportZone", targetPortalName)
+        end)
     end
 end
+
 
 
 
 task.spawn(function()
     while true do
         if _G.AutoTap == true then
-            Network:FireServer("Tap", true)
+            Network:FireServer("Tap", true,true,true)
         end
         task.wait(0.1) -- giảm lag, FPS thấp vẫn ổn
     end
@@ -715,15 +733,14 @@ local function RunAutoRainbow()
     end
 end
 
-
--- 1. Ẩn mọi thứ trong Workspace (Transparency = 1 và tắt Va chạm)
-for _, item in ipairs(workspace:GetDescendants()) do
-    if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
-        item.Transparency = 1
+while true do
+    for _, item in ipairs(workspace:GetDescendants()) do
+        if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
+            item.Transparency = 1
+        end
     end
+    task.wait(10)
 end
-
-
 task.spawn(function()
     while _G.AutoElectricSpin do
         -- Lấy dữ liệu lượt quay từ Replication module
@@ -911,7 +928,7 @@ task.spawn(function()
             print("Electric")
             startAutoCraftElectric()
         end
-        teleportToBestIslandSafe()
+        SmartTeleportNoUI()
         task.wait(1)
     end
 end)
