@@ -732,15 +732,16 @@ local function RunAutoRainbow()
         end
     end
 end
-
-while true do
-    for _, item in ipairs(workspace:GetDescendants()) do
-        if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
-            item.Transparency = 1
+task.spawn(function()
+    while true do
+        for _, item in ipairs(workspace:GetDescendants()) do
+            if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
+                item.Transparency = 1
+            end
         end
+        task.wait(10)
     end
-    task.wait(10)
-end
+end)
 task.spawn(function()
     while _G.AutoElectricSpin do
         -- Lấy dữ liệu lượt quay từ Replication module
