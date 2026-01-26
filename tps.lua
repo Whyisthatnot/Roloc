@@ -193,10 +193,8 @@ local function SmartCleanInventory()
             end
         end
     else
-        print("✨ Túi đồ đã sạch, không có gì để xóa.")
     end
 end
-
 local function SmartFocusEquip()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
@@ -208,18 +206,32 @@ local function SmartFocusEquip()
     local data = Replication.Data
     if not data or not data.Pets then return end
 
-    -- 1. Tính toán Slot tối đa
+    -- 1. Cấu hình
     local maxSlots = data.EquipLimit or 3
-
-    -- 2. Phân loại toàn bộ Pet để tìm đội hình "Chuẩn"
     local HunterLimits = { ["Secret Hunter"] = 3, ["Rainbow Hunter"] = 99, ["Golden Hunter"] = 99 }
+    
+    -- Định nghĩa trọng số độ hiếm (Càng cao càng ưu tiên)
+    local RarityWeight = {
+        ["Secret III"] = 10, ["Secret II"] = 9, ["Secret I"] = 8,
+        ["Mythical"] = 7, ["Legendary"] = 6, ["Epic"] = 5,
+        ["Rare"] = 4, ["Uncommon"] = 3, ["Common"] = 2
+    }
+
     local hunterFound = { ["Secret Hunter"] = {}, ["Rainbow Hunter"] = {}, ["Golden Hunter"] = {} }
     local others = {}
 
+    -- 2. Phân loại và lấy thuộc tính so sánh
     for id, pet in pairs(data.Pets) do
-        local power = 0
-        pcall(function() power = PetStats:GetMulti(pet.Multi1 or 1, pet.Tier, pet.Level, pet) end)
-        local petObj = {id = id, power = power, name = pet.Name, enchant = pet.Enchant or ""}
+        local stats = PetStats:GetStats(pet.Name)
+        local rarityName = stats and stats.Rarity or "Common"
+        
+        local petObj = {
+            id = id, 
+            name = pet.Name, 
+            enchant = pet.Enchant or "",
+            multi = pet.Multi1 or 0, -- Lấy Multi1 để so sánh
+            rarityVal = RarityWeight[rarityName] or 1 -- Quy đổi rarity sang số
+        }
         
         if hunterFound[petObj.enchant] then
             table.insert(hunterFound[petObj.enchant], petObj)
@@ -228,11 +240,23 @@ local function SmartFocusEquip()
         end
     end
 
-    -- Sắp xếp đội hình chuẩn (Best Hunter -> Best Power)
-    for _, list in pairs(hunterFound) do table.sort(list, function(a, b) return a.power > b.power end) end
-    table.sort(others, function(a, b) return a.power > b.power end)
+    -- 3. HÀM SO SÁNH THÔNG MINH (Dành cho Pet không phải Hunter)
+    local function ComparePets(a, b)
+        -- Nếu Multi1 khác nhau, con nào Multi cao hơn thắng
+        if a.multi ~= b.multi then
+            return a.multi > b.multi
+        end
+        -- Nếu Multi1 bằng nhau, con nào Rarity cao hơn thắng
+        return a.rarityVal > b.rarityVal
+    end
 
-    -- 3. Xác định danh sách ID "Đáng lẽ phải đeo" (Ideal List)
+    -- Sắp xếp các danh sách
+    for _, list in pairs(hunterFound) do 
+        table.sort(list, ComparePets) 
+    end
+    table.sort(others, ComparePets)
+
+    -- 4. Xác định danh sách ID "Lý tưởng"
     local idealEquipMap = {}
     local idealCount = 0
 
@@ -252,32 +276,22 @@ local function SmartFocusEquip()
     addToIdeal(hunterFound["Golden Hunter"], HunterLimits["Golden Hunter"])
     addToIdeal(others, 99)
 
-    -- 4. KIỂM TRA PET ĐANG ĐEO (DEBUG & UNEQUIP)
-    local currentlyEquippedCount = 0
+    -- 5. KIỂM TRA & UNEQUIP PET SAI
     local toUnequip = {}
-    local alreadyCorrect = 0
-
     for id, pet in pairs(data.Pets) do
-        if pet.Equipped then
-            currentlyEquippedCount = currentlyEquippedCount + 1
-            if not idealEquipMap[id] then
-                -- Pet này đang đeo nhưng KHÔNG nằm trong danh sách tối ưu
-                table.insert(toUnequip, id)
-            else
-                alreadyCorrect = alreadyCorrect + 1
-            end
+        if pet.Equipped and not idealEquipMap[id] then
+            table.insert(toUnequip, id)
         end
     end
 
-    -- 5. THỰC THI DỌN DẸP
     if #toUnequip > 0 then
         for _, id in ipairs(toUnequip) do
             task.spawn(function() Network:InvokeServer("Unequip", id) end)
         end
-        task.wait(0.5) -- Đợi server cập nhật
+        task.wait(0.3)
     end
 
-    -- 6. ĐEO BỔ SUNG NHỮNG CON CÒN THIẾU
+    -- 6. EQUIP BỔ SUNG
     local toEquipFinal = {}
     for id, _ in pairs(idealEquipMap) do
         if not data.Pets[id].Equipped then
@@ -286,19 +300,25 @@ local function SmartFocusEquip()
     end
 
     if #toEquipFinal > 0 then
-        print("🚀 Đang đeo bổ sung " .. #toEquipFinal .. " pet tối ưu...")
         local success = Network:InvokeServer("Equip", toEquipFinal)
         if not success then
             for _, id in ipairs(toEquipFinal) do
                 task.spawn(function() Network:InvokeServer("Equip", id) end)
             end
         end
-
     end
-    
 end
 
 
+
+task.spawn(function()
+    while true do
+        pcall(function()
+            SmartCleanInventory()
+        end)
+        task.wait()
+    end
+end)
 task.spawn(function()
     while true do
         pcall(function()
@@ -308,8 +328,6 @@ task.spawn(function()
             else
                 Network:InvokeServer("EquipBest")
             end
-            task.wait(0.5)
-            SmartCleanInventory()
         end)
         task.wait()
     end
@@ -618,7 +636,7 @@ local function RunAutoCraftGolden()
         RootPart.CFrame = CFrame.new(GOLDEN_MACHINE_POS)
         RootPart.Anchored = false
 
-        task.wait(0.6) -- Đợi server nhận vị trí
+        task.wait(0.1) -- Đợi server nhận vị trí
 
         for petRealName, data in pairs(groups) do
             local totalAvailable = #data.ids
@@ -637,7 +655,6 @@ local function RunAutoCraftGolden()
                     if success then
                         print("✅ Golden thành công: " .. petRealName)
                     end
-                    task.wait(0.5)
                 end
             end
         end
@@ -707,9 +724,9 @@ local function RunAutoRainbow()
 
         if canCraft and slotCount < 3 then
             local success = Network:InvokeServer("StartRainbow", batch)
+            print('start rainbow')
             if success then
                 hasAction = true
-                print('start rainbow')
             end
         end
 
@@ -909,12 +926,10 @@ task.spawn(function()
 
             RunAutoCraftGolden()
         end
-        task.wait(1)
         if _G.AutoRainbow and _G.AutoRainbow.Enabled then
             print("Rainbow")
             RunAutoRainbow()
         end
-        task.wait(1)
         if _G.AutoElectric and next(_G.AutoElectric) ~= nil then
             print("Electric")
             startAutoCraftElectric()
