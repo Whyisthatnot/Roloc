@@ -49,13 +49,13 @@ _G.AutoHatch = {
 _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Lightning Wyvern"] = 5,
+        ["Lightning Wyvern"] = 6,
     }
 }
 _G.AutoRainbow = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Electrical Glitch"] = 5,
+        ["Lightning Wyvern"] = 1,
     }
 }
 
@@ -732,16 +732,12 @@ local function RunAutoRainbow()
         end
     end
 end
-task.spawn(function()
-    while true do
-        for _, item in ipairs(workspace:GetDescendants()) do
-            if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
-                item.Transparency = 1
-            end
-        end
-        task.wait(10)
+for _, item in ipairs(workspace:GetDescendants()) do
+    if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
+        item.Transparency = 1
     end
-end)
+end
+
 task.spawn(function()
     while _G.AutoElectricSpin do
         -- Lấy dữ liệu lượt quay từ Replication module
