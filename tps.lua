@@ -9,7 +9,7 @@ _G.AutoElectricSpin = true
 _G.AutoBuyPotion = true
 _G.FocusEquip = true
 _G.AutoElectric = {
-    ["Electrical Glitch"] = 3
+    ["Lightning Wyvern"] = 3
 }
 _G.AutoDelete = {
     -- Danh sách độ hiếm muốn giữ lại (Viết đúng tên rarity)
@@ -19,7 +19,6 @@ _G.AutoDelete = {
     
     -- Danh sách tên Pet muốn giữ lại
     ["SafePetNames"] = {
-        "Electrical Glitch", 
         "Lightning Wyvern",
     },
     
@@ -50,7 +49,7 @@ _G.AutoHatch = {
 _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Electrical Glitch"] = 5,
+        ["Lightning Wyvern"] = 5,
     }
 }
 _G.AutoRainbow = {
@@ -132,7 +131,7 @@ end
 task.spawn(function()
     while true do
         if _G.AutoTap == true then
-            for i = 1,2 do
+            for i = 1,10 do
                 Network:FireServer("Tap", true , false, false)
             end
             Network:FireServer("Tap", true , false, true)
@@ -149,9 +148,18 @@ local function SmartCleanInventory()
     local inventory = Replication.Data and Replication.Data.Pets
     if not inventory then return end
 
-    -- Chuyển đổi List sang Map để script check nhanh hơn (Optimization)
+    -- 1. LẤY DANH SÁCH "BEST" TỪ SERVER ĐỂ WHITELIST
+    -- Chúng ta gọi hàm này để biết Server ưu tiên những con nào
+    local serverBestIds = Network:InvokeServer("EquipBest") or {}
+    local serverBestMap = {}
+    for _, id in ipairs(serverBestIds) do
+        serverBestMap[id] = true
+    end
+
+    -- 2. CÁC CẤU HÌNH WHITELIST KHÁC
     local function ToMap(list)
         local t = {}
+        if not list then return t end
         for _, v in pairs(list) do t[v] = true end
         return t
     end
@@ -162,110 +170,77 @@ local function SmartCleanInventory()
 
     local idsToDelete = {}
 
+    -- 3. QUÉT TÚI ĐỒ VÀ KIỂM TRA ĐIỀU KIỆN
     for id, data in pairs(inventory) do
         local stats = PetStats:GetStats(data.Name)
         local trueRarity = stats and stats.Rarity or "Common"
         local currentEnchant = data.Enchant or ""
         
-        -- KIỂM TRA ĐIỀU KIỆN GIỮ (WHITELIST)
+        -- ĐIỀU KIỆN GIỮ (WHITELIST)
         local isSafe = (
-            data.Equipped or 
-            data.Locked or 
-            PetNameMap[data.Name] or 
-            RarityMap[trueRarity] or 
-            EnchantMap[currentEnchant]
+            data.Equipped or            -- Đang đeo
+            data.Locked or              -- Đang khóa
+            serverBestMap[id] or        -- Nằm trong danh sách "Best" của Server
+            PetNameMap[data.Name] or    -- Tên nằm trong danh sách an toàn
+            RarityMap[trueRarity] or    -- Độ hiếm an toàn
+            EnchantMap[currentEnchant]  -- Enchant an toàn (Ví dụ: Hunter)
         )
 
-        -- Nếu không an toàn thì mới cho vào danh sách xóa
+        -- Nếu không thỏa mãn bất kỳ điều kiện an toàn nào -> XÓA
         if not isSafe then
             table.insert(idsToDelete, id)
         end
     end
 
-    -- THỰC THI XÓA
+    -- 4. THỰC THI XÓA
     if #idsToDelete > 0 then
+        print("🗑️ Auto Delete: Đang xóa " .. #idsToDelete .. " pet không cần thiết.")
+        
         local success = Network:InvokeServer("DeletePet", idsToDelete)
         
         if not success then
-            -- Backup nếu gửi cả cụm bị lỗi
+            -- Backup xóa đơn lẻ nếu mảng quá lớn
             for _, petId in pairs(idsToDelete) do
                 task.spawn(function() Network:InvokeServer("DeletePet", petId) end)
             end
         end
-    else
     end
 end
+
 local function SmartFocusEquip()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
     local Replication = require(ReplicatedStorage.Game.Replication)
-    local PetStats = require(ReplicatedStorage.Game.PetStats)
-
+    
     if not _G.FocusEquip then return end
-
     local data = Replication.Data
     if not data or not data.Pets then return end
 
-    -- 1. Cấu hình
-    local maxSlots = data.EquipLimit or 3
+    local maxSlots = data.EquipLimit or 5 
     local HunterLimits = { ["Secret Hunter"] = 3, ["Rainbow Hunter"] = 99, ["Golden Hunter"] = 99 }
     
-    -- Định nghĩa trọng số độ hiếm (Càng cao càng ưu tiên)
-    local RarityWeight = {
-        ["Secret III"] = 10, ["Secret II"] = 9, ["Secret I"] = 8,
-        ["Mythical"] = 7, ["Legendary"] = 6, ["Epic"] = 5,
-        ["Rare"] = 4, ["Uncommon"] = 3, ["Common"] = 2
-    }
+    -- 1. Lấy danh sách ID mạnh nhất từ Server
+    local serverBestIds = Network:InvokeServer("EquipBest") or {}
 
+    -- 2. Phân loại Pet Hunter
     local hunterFound = { ["Secret Hunter"] = {}, ["Rainbow Hunter"] = {}, ["Golden Hunter"] = {} }
-    local others = {}
-
-    -- 2. Phân loại và lấy thuộc tính so sánh
     for id, pet in pairs(data.Pets) do
-        local stats = PetStats:GetStats(pet.Name)
-        local rarityName = stats and stats.Rarity or "Common"
-        
-        local petObj = {
-            id = id, 
-            name = pet.Name, 
-            enchant = pet.Enchant or "",
-            multi = pet.Multi1 or 0, -- Lấy Multi1 để so sánh
-            rarityVal = RarityWeight[rarityName] or 1 -- Quy đổi rarity sang số
-        }
-        
-        if hunterFound[petObj.enchant] then
-            table.insert(hunterFound[petObj.enchant], petObj)
-        else
-            table.insert(others, petObj)
+        local enchant = pet.Enchant or ""
+        if hunterFound[enchant] then
+            table.insert(hunterFound[enchant], id)
         end
     end
 
-    -- 3. HÀM SO SÁNH THÔNG MINH (Dành cho Pet không phải Hunter)
-    local function ComparePets(a, b)
-        -- Nếu Multi1 khác nhau, con nào Multi cao hơn thắng
-        if a.multi ~= b.multi then
-            return a.multi > b.multi
-        end
-        -- Nếu Multi1 bằng nhau, con nào Rarity cao hơn thắng
-        return a.rarityVal > b.rarityVal
-    end
-
-    -- Sắp xếp các danh sách
-    for _, list in pairs(hunterFound) do 
-        table.sort(list, ComparePets) 
-    end
-    table.sort(others, ComparePets)
-
-    -- 4. Xác định danh sách ID "Lý tưởng"
-    local idealEquipMap = {}
-    local idealCount = 0
+    -- 3. Xây dựng Đội hình Lý tưởng
+    local idealList = {}
+    local idealMap = {}
 
     local function addToIdeal(list, limit)
         local added = 0
-        for _, pet in ipairs(list) do
-            if idealCount < maxSlots and added < limit then
-                idealEquipMap[pet.id] = true
-                idealCount = idealCount + 1
+        for _, id in ipairs(list) do
+            if #idealList < maxSlots and added < limit and not idealMap[id] then
+                table.insert(idealList, id)
+                idealMap[id] = true
                 added = added + 1
             end
         end
@@ -274,40 +249,51 @@ local function SmartFocusEquip()
     addToIdeal(hunterFound["Secret Hunter"], HunterLimits["Secret Hunter"])
     addToIdeal(hunterFound["Rainbow Hunter"], HunterLimits["Rainbow Hunter"])
     addToIdeal(hunterFound["Golden Hunter"], HunterLimits["Golden Hunter"])
-    addToIdeal(others, 99)
+    addToIdeal(serverBestIds, 99)
 
-    -- 5. KIỂM TRA & UNEQUIP PET SAI
-    local toUnequip = {}
+    -- 4. Kiểm tra thay đổi
+    local currentlyEquipped = {}
     for id, pet in pairs(data.Pets) do
-        if pet.Equipped and not idealEquipMap[id] then
-            table.insert(toUnequip, id)
-        end
+        if pet.Equipped then table.insert(currentlyEquipped, id) end
     end
 
-    if #toUnequip > 0 then
-        for _, id in ipairs(toUnequip) do
-            task.spawn(function() Network:InvokeServer("Unequip", id) end)
-        end
-        task.wait(0.3)
-    end
-
-    -- 6. EQUIP BỔ SUNG
-    local toEquipFinal = {}
-    for id, _ in pairs(idealEquipMap) do
-        if not data.Pets[id].Equipped then
-            table.insert(toEquipFinal, id)
-        end
-    end
-
-    if #toEquipFinal > 0 then
-        local success = Network:InvokeServer("Equip", toEquipFinal)
-        if not success then
-            for _, id in ipairs(toEquipFinal) do
-                task.spawn(function() Network:InvokeServer("Equip", id) end)
+    local needsChange = false
+    if #currentlyEquipped ~= #idealList then
+        needsChange = true
+    else
+        for _, id in ipairs(idealList) do
+            if not data.Pets[id] or not data.Pets[id].Equipped then 
+                needsChange = true 
+                break 
             end
         end
     end
+
+    -- 5. THỰC THI (SỬA LỖI GỬI LỆNH ĐƠN)
+    if needsChange then
+        print("🔄 Đang thiết lập lại đội hình tối ưu...")
+        
+        -- Dọn sạch để tránh lỗi kẹt slot
+        Network:InvokeServer("UnequipAll")
+        task.wait(0.3)
+
+        -- Đeo từng con một để Server nhận diện đúng
+        for i, id in ipairs(idealList) do
+            task.spawn(function()
+                local success = Network:InvokeServer("Equip", id)
+                if success then
+                    local p = data.Pets[id]
+                    print(string.format("✅ Slot %d: %s [%s]", i, p.Name, p.Enchant or "None"))
+                else
+                    print(string.format("❌ Lỗi đeo Slot %d (ID: %s)", i, id))
+                end
+            end)
+            task.wait(0.1) -- Delay siêu nhỏ để tránh spam
+        end
+        print("✨ Hoàn tất quá trình Equip.")
+    end
 end
+
 
 
 
@@ -709,8 +695,6 @@ local function RunAutoRainbow()
 
     if needClaim or (canCraft and slotCount < 3) then
         RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS)
-        RootPart.Anchored = false
-
         task.wait()
 
         for slotId, data in pairs(activeCrafts) do
