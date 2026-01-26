@@ -114,11 +114,9 @@ local function teleportToBestIslandSafe()
     if bestIslandPart then
         rootPart.Velocity = Vector3.zero
         -- Dịch chuyển lên cao 25 block để an toàn tuyệt đối
-        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 75, 0))
-        -- Khóa nhân vật lại trên không
-        rootPart.Anchored = true
+        rootPart.CFrame = CFrame.new(bestIslandPart.Position + Vector3.new(0, 5, 0))
 
-        -- Đợi 1 giây để map load
+
         task.wait(1)
 
     else
@@ -131,10 +129,7 @@ end
 task.spawn(function()
     while true do
         if _G.AutoTap == true then
-            for i = 1,10 do
-                Network:FireServer("Tap", true , false, false)
-            end
-            Network:FireServer("Tap", true , false, true)
+            Network:FireServer("Tap", true)
         end
         task.wait(0.1) -- giảm lag, FPS thấp vẫn ổn
     end
@@ -397,7 +392,7 @@ end)
 
 task.spawn(function()
     local lastRebirthTick = 0
-    local MAX_INDEX_LIMIT = 23 -- Giới hạn index cao nhất ông muốn
+    local MAX_INDEX_LIMIT = 99 -- Giới hạn index cao nhất ông muốn
 
     while task.wait(0.5) do 
         local data = Replication.Data
@@ -620,7 +615,6 @@ local function RunAutoCraftGolden()
     if needsToTeleport then
         print(">>> Đang Teleport về máy Golden...")
         RootPart.CFrame = CFrame.new(GOLDEN_MACHINE_POS)
-        RootPart.Anchored = false
 
         task.wait(0.1) -- Đợi server nhận vị trí
 
@@ -869,7 +863,6 @@ local function startAutoCraftElectric()
         
         RootPart.CFrame = CFrame.new(ELECTRIC_MACHINE_POS)
         task.wait()
-        RootPart.Anchored = false
 
         task.wait(0.7) -- Đợi server cập nhật vị trí
 
