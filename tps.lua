@@ -7,8 +7,29 @@ _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
 _G.AutoElectricSpin = true
 _G.AutoBuyPotion = true
-_G.AutoElectric = {["Electrical Glitch"] = 3}
-
+_G.FocusEquip = true
+_G.AutoElectric = {
+    ["Electrical Glitch"] = 3
+}
+_G.AutoDelete = {
+    -- Danh sách độ hiếm muốn giữ lại (Viết đúng tên rarity)
+    ["SafeRarities"] = {
+        "Secret I", "Secret II", "Secret III"
+    },
+    
+    -- Danh sách tên Pet muốn giữ lại
+    ["SafePetNames"] = {
+        "Electrical Glitch", 
+        "Lightning Wyvern",
+    },
+    
+    -- Danh sách Enchant muốn giữ lại
+    ["SafeEnchants"] = {
+        "Secret Hunter", 
+        "Golden Hunter", 
+        "Rainbow Hunter", 
+    }
+}
 _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
@@ -23,7 +44,7 @@ _G.AutoPotion = {
 _G.AutoHatch = {
     ["Enabled"] = true,
     ["Egg"] = {
-        ["Snowman"] = true,
+        ["Lightning Event"] = true,
     }
 }
 _G.AutoGoldenConfig = {
@@ -128,84 +149,165 @@ local function SmartCleanInventory()
     local inventory = Replication.Data and Replication.Data.Pets
     if not inventory then return end
 
-    local RarityPriority = {
-        ["Mythical"] = 6, ["Legendary"] = 5, ["Epic"] = 4, 
-        ["Rare"] = 3, ["Uncommon"] = 2, ["Common"] = 1
-    }
-    local TierPriority = {
-        ["Rainbow"] = 3, ["Golden"] = 2, ["Normal"] = 1
-    }
-    local SafeRarities = {
-        ["Secret I"] = true, ["Secret II"] = true, ["Secret III"] = true, ["Legendary"] = true, ["Mythical"] = true
-    }
-    
-    local allPets = {}
-    local MAX_KEEP = 0 
+    -- Chuyển đổi List sang Map để script check nhanh hơn (Optimization)
+    local function ToMap(list)
+        local t = {}
+        for _, v in pairs(list) do t[v] = true end
+        return t
+    end
+
+    local RarityMap = ToMap(_G.AutoDelete.SafeRarities)
+    local PetNameMap = ToMap(_G.AutoDelete.SafePetNames)
+    local EnchantMap = ToMap(_G.AutoDelete.SafeEnchants)
+
+    local idsToDelete = {}
 
     for id, data in pairs(inventory) do
         local stats = PetStats:GetStats(data.Name)
         local trueRarity = stats and stats.Rarity or "Common"
+        local currentEnchant = data.Enchant or ""
         
-        -- Lọc bỏ pet quan trọng
-        if data.Equipped or data.Locked or SafeRarities[trueRarity] then
-            continue 
+        -- KIỂM TRA ĐIỀU KIỆN GIỮ (WHITELIST)
+        local isSafe = (
+            data.Equipped or 
+            data.Locked or 
+            PetNameMap[data.Name] or 
+            RarityMap[trueRarity] or 
+            EnchantMap[currentEnchant]
+        )
+
+        -- Nếu không an toàn thì mới cho vào danh sách xóa
+        if not isSafe then
+            table.insert(idsToDelete, id)
         end
-
-        local currentPower = 0
-        pcall(function()
-            currentPower = PetStats:GetMulti(data.Multi1 or 1, data.Tier, data.Level, data)
-        end)
-        if currentPower == 0 then currentPower = data.Multi1 or 0 end
-
-        table.insert(allPets, {
-            id = id,
-            name = data.Name,
-            power = currentPower,
-            rarityVal = RarityPriority[trueRarity] or 0,
-            tierVal = TierPriority[data.Tier] or 0,
-            tierName = data.Tier or "Normal",
-            rarityName = trueRarity
-        })
     end
 
-    -- Sắp xếp yếu xuống dưới
-    table.sort(allPets, function(a, b)
-        if a.power ~= b.power then return a.power > b.power end
-        if a.rarityVal ~= b.rarityVal then return a.rarityVal > b.rarityVal end
-        return a.tierVal > b.tierVal
-    end)
-
-    local idsToDelete = {}
-    local deleteSummary = {}
-
-    if #allPets > MAX_KEEP then
-        for i = MAX_KEEP + 1, #allPets do
-            local pet = allPets[i]
-            table.insert(idsToDelete, pet.id)
-
-            local groupKey = string.format("%s [%s - %s]", pet.name, pet.tierName, pet.rarityName)
-            deleteSummary[groupKey] = (deleteSummary[groupKey] or 0) + 1
-        end
-        
-        -- Chỉ in kết quả cuối cùng
-
-    end
-
+    -- THỰC THI XÓA
     if #idsToDelete > 0 then
         local success = Network:InvokeServer("DeletePet", idsToDelete)
+        
         if not success then
+            -- Backup nếu gửi cả cụm bị lỗi
             for _, petId in pairs(idsToDelete) do
                 task.spawn(function() Network:InvokeServer("DeletePet", petId) end)
             end
         end
+    else
+        print("✨ Túi đồ đã sạch, không có gì để xóa.")
     end
 end
+
+local function SmartFocusEquip()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Network = require(ReplicatedStorage.Modules.Network)
+    local Replication = require(ReplicatedStorage.Game.Replication)
+    local PetStats = require(ReplicatedStorage.Game.PetStats)
+
+    if not _G.FocusEquip then return end
+
+    local data = Replication.Data
+    if not data or not data.Pets then return end
+
+    -- 1. Tính toán Slot tối đa
+    local maxSlots = data.EquipLimit or 3
+
+    -- 2. Phân loại toàn bộ Pet để tìm đội hình "Chuẩn"
+    local HunterLimits = { ["Secret Hunter"] = 3, ["Rainbow Hunter"] = 99, ["Golden Hunter"] = 99 }
+    local hunterFound = { ["Secret Hunter"] = {}, ["Rainbow Hunter"] = {}, ["Golden Hunter"] = {} }
+    local others = {}
+
+    for id, pet in pairs(data.Pets) do
+        local power = 0
+        pcall(function() power = PetStats:GetMulti(pet.Multi1 or 1, pet.Tier, pet.Level, pet) end)
+        local petObj = {id = id, power = power, name = pet.Name, enchant = pet.Enchant or ""}
+        
+        if hunterFound[petObj.enchant] then
+            table.insert(hunterFound[petObj.enchant], petObj)
+        else
+            table.insert(others, petObj)
+        end
+    end
+
+    -- Sắp xếp đội hình chuẩn (Best Hunter -> Best Power)
+    for _, list in pairs(hunterFound) do table.sort(list, function(a, b) return a.power > b.power end) end
+    table.sort(others, function(a, b) return a.power > b.power end)
+
+    -- 3. Xác định danh sách ID "Đáng lẽ phải đeo" (Ideal List)
+    local idealEquipMap = {}
+    local idealCount = 0
+
+    local function addToIdeal(list, limit)
+        local added = 0
+        for _, pet in ipairs(list) do
+            if idealCount < maxSlots and added < limit then
+                idealEquipMap[pet.id] = true
+                idealCount = idealCount + 1
+                added = added + 1
+            end
+        end
+    end
+
+    addToIdeal(hunterFound["Secret Hunter"], HunterLimits["Secret Hunter"])
+    addToIdeal(hunterFound["Rainbow Hunter"], HunterLimits["Rainbow Hunter"])
+    addToIdeal(hunterFound["Golden Hunter"], HunterLimits["Golden Hunter"])
+    addToIdeal(others, 99)
+
+    -- 4. KIỂM TRA PET ĐANG ĐEO (DEBUG & UNEQUIP)
+    local currentlyEquippedCount = 0
+    local toUnequip = {}
+    local alreadyCorrect = 0
+
+    for id, pet in pairs(data.Pets) do
+        if pet.Equipped then
+            currentlyEquippedCount = currentlyEquippedCount + 1
+            if not idealEquipMap[id] then
+                -- Pet này đang đeo nhưng KHÔNG nằm trong danh sách tối ưu
+                table.insert(toUnequip, id)
+            else
+                alreadyCorrect = alreadyCorrect + 1
+            end
+        end
+    end
+
+    -- 5. THỰC THI DỌN DẸP
+    if #toUnequip > 0 then
+        for _, id in ipairs(toUnequip) do
+            task.spawn(function() Network:InvokeServer("Unequip", id) end)
+        end
+        task.wait(0.5) -- Đợi server cập nhật
+    end
+
+    -- 6. ĐEO BỔ SUNG NHỮNG CON CÒN THIẾU
+    local toEquipFinal = {}
+    for id, _ in pairs(idealEquipMap) do
+        if not data.Pets[id].Equipped then
+            table.insert(toEquipFinal, id)
+        end
+    end
+
+    if #toEquipFinal > 0 then
+        print("🚀 Đang đeo bổ sung " .. #toEquipFinal .. " pet tối ưu...")
+        local success = Network:InvokeServer("Equip", toEquipFinal)
+        if not success then
+            for _, id in ipairs(toEquipFinal) do
+                task.spawn(function() Network:InvokeServer("Equip", id) end)
+            end
+        end
+
+    end
+    
+end
+
 
 task.spawn(function()
     while true do
         pcall(function()
             local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
-            Network:InvokeServer("EquipBest")
+            if _G.FocusEquip then
+                SmartFocusEquip()
+            else
+                Network:InvokeServer("EquipBest")
+            end
             task.wait(0.5)
             SmartCleanInventory()
         end)
