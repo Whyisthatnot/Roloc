@@ -11,6 +11,7 @@ _G.FocusEquip = true
 _G.AutoElectric = {
     ["Lightning Wyvern"] = 3
 }
+
 _G.AutoDelete = {
     -- Danh sách độ hiếm muốn giữ lại (Viết đúng tên rarity)
     ["SafeRarities"] = {
@@ -29,6 +30,7 @@ _G.AutoDelete = {
         "Rainbow Hunter", 
     }
 }
+
 _G.AutoPotion = {
     ["Enabled"] = true,
     ["Use"] = {
@@ -40,6 +42,7 @@ _G.AutoPotion = {
         "Octo"
     }
 }
+
 _G.AutoHatch = {
     ["Enabled"] = true,
     ["Egg"] = {
@@ -152,6 +155,7 @@ task.spawn(function()
         task.wait(0.1) -- giảm lag, FPS thấp vẫn ổn
     end
 end)
+
 local function SmartCleanInventory()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
@@ -161,18 +165,9 @@ local function SmartCleanInventory()
     local inventory = Replication.Data and Replication.Data.Pets
     if not inventory then return end
 
-    -- 1. LẤY DANH SÁCH "BEST" TỪ SERVER ĐỂ WHITELIST
-    -- Chúng ta gọi hàm này để biết Server ưu tiên những con nào
-    local serverBestIds = Network:InvokeServer("EquipBest") or {}
-    local serverBestMap = {}
-    for _, id in ipairs(serverBestIds) do
-        serverBestMap[id] = true
-    end
-
-    -- 2. CÁC CẤU HÌNH WHITELIST KHÁC
+    -- Chuyển đổi List sang Map để script check nhanh hơn (Optimization)
     local function ToMap(list)
         local t = {}
-        if not list then return t end
         for _, v in pairs(list) do t[v] = true end
         return t
     end
@@ -183,36 +178,32 @@ local function SmartCleanInventory()
 
     local idsToDelete = {}
 
-    -- 3. QUÉT TÚI ĐỒ VÀ KIỂM TRA ĐIỀU KIỆN
     for id, data in pairs(inventory) do
         local stats = PetStats:GetStats(data.Name)
         local trueRarity = stats and stats.Rarity or "Common"
         local currentEnchant = data.Enchant or ""
         
-        -- ĐIỀU KIỆN GIỮ (WHITELIST)
+        -- KIỂM TRA ĐIỀU KIỆN GIỮ (WHITELIST)
         local isSafe = (
-            data.Equipped or            -- Đang đeo
-            data.Locked or              -- Đang khóa
-            serverBestMap[id] or        -- Nằm trong danh sách "Best" của Server
-            PetNameMap[data.Name] or    -- Tên nằm trong danh sách an toàn
-            RarityMap[trueRarity] or    -- Độ hiếm an toàn
-            EnchantMap[currentEnchant]  -- Enchant an toàn (Ví dụ: Hunter)
+            data.Equipped or 
+            data.Locked or 
+            PetNameMap[data.Name] or 
+            RarityMap[trueRarity] or 
+            EnchantMap[currentEnchant]
         )
 
-        -- Nếu không thỏa mãn bất kỳ điều kiện an toàn nào -> XÓA
+        -- Nếu không an toàn thì mới cho vào danh sách xóa
         if not isSafe then
             table.insert(idsToDelete, id)
         end
     end
 
-    -- 4. THỰC THI XÓA
+    -- THỰC THI XÓA
     if #idsToDelete > 0 then
-        print("🗑️ Auto Delete: Đang xóa " .. #idsToDelete .. " pet không cần thiết.")
-        
         local success = Network:InvokeServer("DeletePet", idsToDelete)
         
         if not success then
-            -- Backup xóa đơn lẻ nếu mảng quá lớn
+            -- Backup nếu gửi cả cụm bị lỗi
             for _, petId in pairs(idsToDelete) do
                 task.spawn(function() Network:InvokeServer("DeletePet", petId) end)
             end
@@ -220,6 +211,61 @@ local function SmartCleanInventory()
     end
 end
 
+local function ApplyHatchAutoDelete()
+    local RS = game:GetService("ReplicatedStorage")
+    local Network = require(RS.Modules.Network)
+    local EggsModule = require(RS.Game.Eggs)
+    local PetStats = require(RS.Game.PetStats)
+    
+    -- Lấy dữ liệu trứng (Bypass lỗi call function line 711)
+    local EggsData = (type(EggsModule) == "table" and EggsModule) or debug.getupvalues(EggsModule)[1] or {}
+    local MasterDeleteList = {}
+
+    print("\n--- 🔍 ĐANG THIẾT LẬP AUTO DELETE CHO TRỨNG ĐANG HATCH ---")
+
+    -- Chỉ quét những trứng nằm trong _G.AutoHatch.Egg
+    for eggName, isHatching in pairs(_G.AutoHatch.Egg) do
+        if isHatching and EggsData[eggName] then
+            local eggInfo = EggsData[eggName]
+            local petsInEgg = eggInfo.Pets or eggInfo.Contents or eggInfo.List
+            
+            if type(petsInEgg) == "table" then
+                local toDelete = {}
+                
+                for key, value in pairs(petsInEgg) do
+                    local petName = (type(key) == "string" and key) or (type(value) == "table" and (value.Name or value[1])) or (type(value) == "string" and value)
+                    
+                    if petName then
+                        local data = PetStats.AllPets and PetStats.AllPets[petName] or {}
+                        local rarity = data.Rarity or data.Tier or "Unknown"
+                        
+                        local isSafe = table.find(_G.AutoDelete.SafeRarities, rarity) or table.find(_G.AutoDelete.SafePetNames, petName)
+
+                        if not isSafe then
+                            table.insert(toDelete, petName)
+                        end
+                    end
+                end
+                
+                if #toDelete > 0 then
+                    MasterDeleteList[eggName] = toDelete
+                    print("✅ Đã lập danh sách xóa cho: " .. eggName .. " (" .. #toDelete .. " pets)")
+                end
+            end
+        end
+    end
+
+    -- 3. GỬI LỆNH
+    if next(MasterDeleteList) then
+        Network:FireServer("AutoDelete", MasterDeleteList)
+        print("🚀 Đã gửi cấu hình Auto Delete lên Server!")
+    else
+        warn("⚠ Không tìm thấy trứng hợp lệ trong AutoHatch hoặc không có pet để xóa.")
+    end
+end
+
+-- Thực thi
+ApplyHatchAutoDelete()
 local function SmartFocusEquip()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Network = require(ReplicatedStorage.Modules.Network)
@@ -328,7 +374,7 @@ task.spawn(function()
                 Network:InvokeServer("EquipBest")
             end
         end)
-        task.wait()
+        task.wait(10)
     end
 end)
 -- [[ CONFIG CỐ ĐỊNH ]]
@@ -583,16 +629,17 @@ task.spawn(function()
     end
 end)
 
-
 -- Tọa độ máy Golden mặc định ông vừa đưa
 local GOLDEN_MACHINE_POS = Vector3.new(-192.82, 221.40, 197.21)
 
 local function RunAutoCraftGolden()
     local Config = _G.AutoGoldenConfig
-    if not Config or not Config.Enabled then return end
+    -- Kiểm tra cả Config Golden và bảng Safe của AutoDelete
+    if not Config or not Config.Enabled or not _G.AutoDelete then return end
 
-    local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
-    local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Replication = require(ReplicatedStorage.Game.Replication)
+    local Network = require(ReplicatedStorage.Modules.Network)
     local Player = game.Players.LocalPlayer
     local Character = Player.Character
     if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
@@ -600,15 +647,26 @@ local function RunAutoCraftGolden()
     local RootPart = Character.HumanoidRootPart
     if not Replication.Data or not Replication.Data.Pets then return end
     
+    -- 1. Tạo bảng tra cứu Safe Enchant nhanh
+    local safeEnchants = {}
+    for _, v in pairs(_G.AutoDelete.SafeEnchants or {}) do
+        safeEnchants[v] = true
+    end
+
     local inventory = Replication.Data.Pets
     local groups = {}
-    local oldCFrame = RootPart.CFrame -- Lưu vị trí đang đứng farm
+    local oldCFrame = RootPart.CFrame
     local needsToTeleport = false
 
-    -- 1. Quét túi đồ và kiểm tra điều kiện
+    -- 2. Quét túi đồ và kiểm tra điều kiện (Bổ sung lọc Safe Enchant)
     for id, petData in pairs(inventory) do
-        if petData.Tier == "Normal" and not petData.Locked and not petData.Equipped then
+        -- Lấy enchant hiện tại
+        local currentEnchant = petData.Enchant or "None"
+
+        -- Điều kiện cơ bản: Tier Normal, Không Lock, Không Đeo, KHÔNG nằm trong Safe Enchant
+        if petData.Tier == "Normal" and not petData.Locked and not petData.Equipped and not safeEnchants[currentEnchant] then
             local pNameLower = string.lower(petData.Name)
+            
             for targetName, amount in pairs(Config.Pets) do
                 if string.find(pNameLower, string.lower(targetName)) then
                     if not groups[petData.Name] then
@@ -618,10 +676,13 @@ local function RunAutoCraftGolden()
                     break 
                 end
             end
+        elseif safeEnchants[currentEnchant] and petData.Tier == "Normal" then
+            -- Debug nhẹ để ông biết nó đã cứu được 1 con pet
+            -- print("🛡️ Đã bỏ qua " .. petData.Name .. " vì có Enchant: " .. currentEnchant)
         end
     end
 
-    -- 2. Kiểm tra xem có đủ pet để thực hiện ít nhất 1 lần ép không
+    -- 3. Kiểm tra xem có đủ pet để thực hiện ít nhất 1 lần ép không
     for _, data in pairs(groups) do
         if #data.ids >= data.required then
             needsToTeleport = true
@@ -629,12 +690,11 @@ local function RunAutoCraftGolden()
         end
     end
 
-    -- 3. Thực hiện Teleport và Ép
+    -- 4. Thực hiện Teleport và Ép
     if needsToTeleport then
         print(">>> Đang Teleport về máy Golden...")
         RootPart.CFrame = CFrame.new(GOLDEN_MACHINE_POS)
-
-        task.wait(0.1) -- Đợi server nhận vị trí
+        task.wait(0.7) -- Đợi server nhận vị trí
 
         for petRealName, data in pairs(groups) do
             local totalAvailable = #data.ids
@@ -653,18 +713,25 @@ local function RunAutoCraftGolden()
                     if success then
                         print("✅ Golden thành công: " .. petRealName)
                     end
+                    task.wait(0.5)
                 end
             end
         end
 
+        task.wait(0.5)
+        print(">>> Quay lại vị trí cũ...")
         RootPart.CFrame = oldCFrame
     end
 end
+
 
 local RAINBOW_MACHINE_POS = Vector3.new(1205.83, 668.98, -13383.21)
 
 local function RunAutoRainbow()
     local Config = _G.AutoRainbow
+    -- Check cả config máy và bảng Safe của AutoDelete
+    if not Config or not _G.AutoDelete or not _G.AutoDelete.SafeEnchants then return end
+
     local Network = require(game:GetService("ReplicatedStorage").Modules.Network)
     local Replication = require(game:GetService("ReplicatedStorage").Game.Replication)
     local Player = game.Players.LocalPlayer
@@ -672,66 +739,99 @@ local function RunAutoRainbow()
     
     if not RootPart or not Replication.Data or not Replication.Data.Pets then return end
 
-    local activeCrafts = Replication.Data.CraftingPets.Rainbow
+    -- 1. Tạo bảng tra cứu Safe Enchant nhanh
+    local safeEnchants = {}
+    for _, v in pairs(_G.AutoDelete.SafeEnchants) do 
+        safeEnchants[v] = true 
+    end
+
     local oldCFrame = RootPart.CFrame
     local hasAction = false
 
-    local needClaim = false
+    -- [ PHẦN 1: CLAIM ]
+    local activeCrafts = Replication.Data.CraftingPets.Rainbow
     for slotId, data in pairs(activeCrafts) do
         if data.EndTime - workspace:GetServerTimeNow() <= 0 then
-            needClaim = true
-            break
+            if not hasAction then 
+                RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS) 
+                task.wait(0.2)
+            end
+            Network:InvokeServer("ClaimRainbow", slotId)
+            print('✅ Claimed Rainbow Slot:', slotId)
+            hasAction = true
+            task.wait(0.3)
         end
     end
 
-    local inventory = Replication.Data.Pets
-    local batch = {}
-    local canCraft = false
-    for targetName, reqAmount in pairs(Config.Pets) do
-        local tempBatch = {}
-        for id, data in pairs(inventory) do
-            if data.Tier == "Golden" and not data.Locked and not data.Equipped and string.find(data.Name, targetName) then
-                table.insert(tempBatch, id)
+    -- [ PHẦN 2: START ]
+    activeCrafts = Replication.Data.CraftingPets.Rainbow
+    local currentSlotsUsed = 0
+    for _ in pairs(activeCrafts) do currentSlotsUsed = currentSlotsUsed + 1 end
+    
+    local maxSlots = 3 
+
+    while currentSlotsUsed < maxSlots do
+        local batch = {}
+        local targetNameFound = nil
+        local reqAmountNeeded = 0
+
+        for targetName, reqAmount in pairs(Config.Pets) do
+            local tempBatch = {}
+            for id, data in pairs(Replication.Data.Pets) do
+                -- LẤY ENCHANT ĐỂ KIỂM TRA
+                local petEnchant = data.Enchant or "None"
+
+                -- ĐIỀU KIỆN: Tier Golden, ko Lock, ko Đeo, đúng Tên VÀ KHÔNG PHẢI SAFE ENCHANT
+                if data.Tier == "Golden" and not data.Locked and not data.Equipped 
+                   and string.find(data.Name, targetName) 
+                   and not safeEnchants[petEnchant] then -- << LỌC Ở ĐÂY
+                    
+                    table.insert(tempBatch, id)
+                end
+                
+                if #tempBatch >= reqAmount then break end
             end
-            if #tempBatch >= reqAmount then break end
-        end
-        if #tempBatch >= reqAmount then
-            batch = tempBatch
-            canCraft = true
-            break
-        end
-    end
 
-    local slotCount = 0
-    for _ in pairs(activeCrafts) do slotCount = slotCount + 1 end
-
-    if needClaim or (canCraft and slotCount < 3) then
-        RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS)
-        task.wait()
-
-        for slotId, data in pairs(activeCrafts) do
-            if data.EndTime - workspace:GetServerTimeNow() <= 0 then
-                Network:InvokeServer("ClaimRainbow", slotId)
-                print('claim rainbow')
-                hasAction = true
-                task.wait(0.5)
+            if #tempBatch >= reqAmount then
+                batch = tempBatch
+                targetNameFound = targetName
+                reqAmountNeeded = reqAmount
+                break
             end
         end
 
-        if canCraft and slotCount < 3 then
+        if targetNameFound then
+            if not hasAction then 
+                RootPart.CFrame = CFrame.new(RAINBOW_MACHINE_POS) 
+                task.wait(0.2)
+            end
+
             local success = Network:InvokeServer("StartRainbow", batch)
-            print('start rainbow')
             if success then
+                print('🚀 Started Rainbow for:', targetNameFound)
                 hasAction = true
+                currentSlotsUsed = currentSlotsUsed + 1
+                
+                -- Loại bỏ pet đã dùng khỏi data tạm để tránh trùng lặp
+                for _, usedId in ipairs(batch) do
+                    Replication.Data.Pets[usedId] = nil 
+                end
+                task.wait(0.5)
+            else
+                break 
             end
+        else
+            break
         end
+    end
 
-        if hasAction then
-            task.wait(0.5)
-            RootPart.CFrame = oldCFrame
-        end
+    if hasAction then
+        task.wait(0.3)
+        RootPart.CFrame = oldCFrame
     end
 end
+
+
 for _, item in ipairs(workspace:GetDescendants()) do
     if item:IsA("BasePart") and not item:IsDescendantOf(game.Players) then
         item.Transparency = 1
@@ -834,12 +934,12 @@ end)
 local ELECTRIC_MACHINE_POS = Vector3.new(-99.08, 209.93 + 3, 205.80)
 
 local function startAutoCraftElectric()
-    if not _G.AutoElectric then return end
+    -- Kiểm tra cấu hình cần thiết
+    if not _G.AutoElectric or not _G.AutoDelete or not _G.AutoDelete.SafeEnchants then return end
     
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local Replication = require(ReplicatedStorage.Game.Replication)
     local Network = require(ReplicatedStorage.Modules.Network)
-    local Signal = require(ReplicatedStorage.Modules.Signal)
     
     local Player = game.Players.LocalPlayer
     local Character = Player.Character
@@ -849,21 +949,41 @@ local function startAutoCraftElectric()
     local inventory = Replication.Data and Replication.Data.Pets
     if not inventory then return end
 
+    -- 1. Tạo bảng tra cứu Safe Enchant từ AutoDelete
+    local safeEnchants = {}
+    for _, v in pairs(_G.AutoDelete.SafeEnchants) do 
+        safeEnchants[v] = true 
+    end
+
     local groups = {}
     local hasEnoughToCraft = false
 
-    -- Bước 1: Thu thập và kiểm tra điều kiện
+    -- 2. Duyệt kho và lọc Pet
     for id, pet in pairs(inventory) do
-        -- Điều kiện: Tên trong Config, Tier Rainbow, chưa có Mutation Electric, ko Lock, ko Đang đeo
-        if _G.AutoElectric[pet.Name] and pet.Tier == "Rainbow" and pet.Mutation ~= "Electric" and not pet.Locked and not pet.Equipped then
-            if not groups[pet.Name] then
-                groups[pet.Name] = {ids = {}, required = _G.AutoElectric[pet.Name]}
+        local petName = pet.Name
+        local petEnchant = pet.Enchant or "None"
+
+        -- Kiểm tra điều kiện Craft và CHỈ SKIP nếu trúng Safe Enchant
+        local isTargetForElectric = _G.AutoElectric[petName]
+        local isRainbow = (pet.Tier == "Rainbow")
+        local notElectric = (pet.Mutation ~= "Electric")
+        local notLocked = (not pet.Locked)
+        local notEquipped = (not pet.Equipped)
+        
+        -- Lọc Enchant quý ở đây
+        local isSafeEnchant = safeEnchants[petEnchant]
+
+        if isTargetForElectric and isRainbow and notElectric and notLocked and notEquipped 
+           and not isSafeEnchant then -- << Chỉ lọc duy nhất Enchant
+            
+            if not groups[petName] then
+                groups[petName] = {ids = {}, required = _G.AutoElectric[petName]}
             end
-            table.insert(groups[pet.Name].ids, id)
+            table.insert(groups[petName].ids, id)
         end
     end
 
-    -- Kiểm tra xem có nhóm nào đủ số lượng để craft không
+    -- 3. Kiểm tra số lượng và Teleport Craft
     for petName, data in pairs(groups) do
         if #data.ids >= data.required then
             hasEnoughToCraft = true
@@ -871,14 +991,12 @@ local function startAutoCraftElectric()
         end
     end
 
-    -- Bước 2: Nếu đủ pet thì mới Teleport và thực hiện Craft
     if hasEnoughToCraft then
-        local oldCFrame = RootPart.CFrame -- Lưu vị trí cũ
+        local oldCFrame = RootPart.CFrame
         
+        -- Dịch chuyển tới máy Electric
         RootPart.CFrame = CFrame.new(ELECTRIC_MACHINE_POS)
-        task.wait()
-
-        task.wait(0.7) -- Đợi server cập nhật vị trí
+        task.wait(0.7)
 
         for petName, data in pairs(groups) do
             while #data.ids >= data.required do
@@ -888,21 +1006,19 @@ local function startAutoCraftElectric()
                     table.remove(data.ids, 1)
                 end
                 
-                
-                -- Gửi lệnh Craft lên Server
                 local success = Network:InvokeServer("CraftPets", batch)
                 
                 if success then
-                    print('craft electric: ' .. petName)
+                    print('✅ Fuse Electric thành công: ' .. petName)
                 else
-                    warn("❌ Chế tạo thất bại: " .. petName)
+                    warn("❌ Fuse thất bại: " .. petName)
                 end
                 
-                task.wait(0.5) -- Tránh spam remote
+                task.wait(0.5)
             end
         end
 
-        -- Quay về vị trí cũ sau khi xong việc
+        -- Quay lại chỗ cũ
         task.wait(0.5)
         RootPart.CFrame = oldCFrame
     end
@@ -926,6 +1042,7 @@ task.spawn(function()
             startAutoCraftElectric()
         end
         SmartTeleportNoUI()
+        SmartCleanInventory()
         task.wait(1)
     end
 end)
