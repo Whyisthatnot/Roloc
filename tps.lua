@@ -58,7 +58,7 @@ _G.AutoGoldenConfig = {
 _G.AutoRainbow = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Lightning Wyvern"] = 1,
+        ["Lightning Wyvern"] = 2,
     }
 }
 
