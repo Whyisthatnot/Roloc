@@ -21,6 +21,8 @@ _G.AutoDelete = {
     -- Danh sách tên Pet muốn giữ lại
     ["SafePetNames"] = {
         "Lightning Wyvern",
+        "Holographic Hybrid",
+        "404_ERROR"
     },
     
     -- Danh sách Enchant muốn giữ lại
@@ -53,12 +55,16 @@ _G.AutoGoldenConfig = {
     ["Enabled"] = true,
     ["Pets"] = {
         ["Lightning Wyvern"] = 6,
+        ["Holographic Hybrid"] = 5,
+        ["404_ERROR"] = 6
     }
 }
 _G.AutoRainbow = {
     ["Enabled"] = true,
     ["Pets"] = {
-        ["Lightning Wyvern"] = 2,
+        ["Lightning Wyvern"] = 5,
+        ["Holographic Hybrid"] = 5,
+        ["404_ERROR"] = 1
     }
 }
 
