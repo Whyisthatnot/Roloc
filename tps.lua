@@ -1,4 +1,4 @@
-setfpscap(5)
+setfpscap(20)
 _G.AutoTap = true
 _G.AutoRebirthMax = false
 _G.AutoCollectQuest = true
