@@ -7,7 +7,7 @@ _G.AutoUpgrade = true
 _G.AutoClaimRank = true 
 _G.AutoElectricSpin = true
 _G.AutoBuyPotion = true
-_G.FocusEquip = true
+_G.FocusEquip = false
 _G.AutoElectric = {
     ["Lightning Wyvern"] = 3
 }
